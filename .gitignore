@@ -15,3 +15,5 @@ data/runtime/
 # Local release bundles and isolated Git integration copies
 dist/
 .worktrees/
+.pdf
+.docx
