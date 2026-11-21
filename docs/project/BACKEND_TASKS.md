@@ -1,5 +1,15 @@
 # EarthLens — estado y tareas del backend
 
+## Auditoría histórica antes de TimesFM — 21/11/2026
+
+Cambios locales en `feature/backend-api`. Se repararon la resolución temporal
+y la lectura cache-only de Time Machine, con regresiones automatizadas y
+pruebas reales puntuales de POWER mensual/diario y ERA5. El
+[informe de cobertura](../science/scientific-sources.md#auditoría-del-backend--21112026)
+distingue los pilotos actuales, los lotes históricos y los casos de software.
+Queda pendiente repetir descargas GLDAS/GPM con acceso Earthdata y verificar
+los períodos adicionales antes de declararlos disponibles por ciudad.
+
 ## Reorganización de carpetas — 21/11/2026
 
 Cambios locales en `refactor/project-structure`. El

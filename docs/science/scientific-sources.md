@@ -1,5 +1,41 @@
 # Fuentes científicas e inicialización multiproveedor
 
+## Auditoría del backend — 21/11/2026
+
+La caché de este checkout estaba vacía al comenzar. Las comprobaciones en vivo
+usaron una caché temporal. Los lotes de 25 ciudades de la tabla son evidencia
+histórica de una ejecución anterior. La disponibilidad del checkout se determina
+por ciudad, variable y período a partir de entradas locales validadas.
+
+| Producto integrado | Variables y resolución | Cobertura comprobada |
+| --- | --- | --- |
+| NASA POWER Monthly AG | `T2M`, `T2M_MAX`, `T2M_MIN`, `PRECTOTCORR`, `RH2M`, `WS2M`, mensual. Precipitación en `mm/day`. | Lote anterior 2000–2024 para 25 ciudades. En esta auditoría Mendoza 2025 devolvió 12 meses válidos por variable. El proveedor publica meteorología desde 1981 hasta el último año anterior publicado. [NASA POWER Monthly API](https://power.larc.nasa.gov/docs/services/api/temporal/monthly/) |
+| NASA POWER Daily AG | Las mismas seis variables, diarias UTC. Precipitación en `mm/day`. | Comodoro Rivadavia, 30/03–01/04/2017, 3 de 3 valores válidos de precipitación. Fuente desde 1981. EarthLens consulta históricos hasta UTC−6 días, es decir, hasta seis días antes de la fecha UTC actual. [NASA POWER Daily API](https://power.larc.nasa.gov/docs/services/api/temporal/daily/) |
+| ERA5 por Open-Meteo Archive | Temperatura a 2 m, humedad relativa, sensación térmica, precipitación, nubosidad, viento a 10 m, ráfagas y dirección, horarios UTC. La integración histórica excluye probabilidad de precipitación y visibilidad. | Mendoza 29/03/1979, 24 de 24 temperaturas válidas, y Ushuaia 01/07/2024, 24 de 24 velocidades válidas. ERA5 se documenta desde 1940. Se aplica el mismo margen local de consulta histórica. [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api) |
+| GLDAS Noah 0,25° v2.1 | Cuatro capas de humedad del suelo y evapotranspiración, mensuales. CSV Giovanni y NetCDF puntual conservan revisiones de caché separadas. | Lote previo 2000–2024 de 25 ciudades, 125 series y 37.500 valores válidos. La lectura tras 2024 se comprobó con fixtures de software. Nuevas descargas requieren Earthdata. [NASA GLDAS v2](https://git.earthdata.nasa.gov/projects/ECS/repos/uvg/raw/input/README_GLDAS2.pdf?at=refs%2Fheads%2Fmaster) |
+| GPM IMERG Final V07 | `precipitation` mensual a 0,1°, conservada en `mm/hr`. | Lote previo 2000–2024 de 25 ciudades, 25 series y 7.500 valores válidos. NASA cataloga el producto desde 1998. Se comprobó la lectura posterior a 2024 con fixtures de software. Nuevas descargas requieren Earthdata. [NASA Earthdata](https://search.earthdata.nasa.gov/search?q=GPM_3IMERGM_07) |
+
+Se reprodujeron y corrigieron el corte fijo de 2024 en POWER mensual y los
+rangos GLDAS/GPM, el bloqueo de ERA5 horario entre 1940 y 1980 por el límite de
+POWER, el foco vacío al consultar un rango que excluía el cursor, el 500 de
+POWER con fechas anteriores a 1981 y el fallo de lectura cuando una caché
+POWER dañada ocultaba otra extracción válida.
+
+`/api/workspace/frame` devuelve el producto y el intervalo efectivos. Cuando un
+rango amplio no está cacheado, puede consultar el año del cursor en una sola
+extracción. `/api/workspace/series` conserva la lectura parcial de la referencia
+2000–2024 para solicitudes POWER que la atraviesan sin disponer de una única
+extracción que cubra todo el rango. Los años completos posteriores a 2024
+requieren su propia cobertura verificada. La referencia climatológica conserva
+2000–2024. GLDAS y GPM mantienen su frecuencia mensual al seleccionar un día.
+
+Los gráficos conservan los ceros y nulos del proveedor, las unidades nativas y
+las fechas de la serie. La ausencia de caché compatible conserva el error
+`503 cache_unavailable` en las lecturas cache-only. Una fecha fuera de la
+cobertura del producto en `/frame` conserva el estado `unavailable`. Una
+consulta directa POWER mensual anterior a 1981 recibe `400 invalid_request`.
+El alcance de `/api/workspace/trends` sigue siendo el motor estadístico existente.
+
 Estado comprobado el 15 de noviembre de 2026, sobre la base `e127aad`.
 El alcance sigue siendo Argentina y las rutas HTTP sólo aceptan ciudades del
 catálogo GeoRef; SWOT usa entidades argentinas curadas en un contrato separado.
