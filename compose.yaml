@@ -97,6 +97,36 @@ services:
         bind:
           create_host_path: false
       - type: bind
+        source: ./data/missions.json
+        target: /app/data/missions.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./data/variables.json
+        target: /app/data/variables.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./data/guided_missions.json
+        target: /app/data/guided_missions.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./data/mission_variables.json
+        target: /app/data/mission_variables.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./deployment
+        target: /app/deployment
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
         source: ./data/cache
         target: /app/data/cache
         bind:

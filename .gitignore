@@ -7,10 +7,12 @@ __pycache__/
 data/runtime/
 *.pyc
 
-# Variables de entorno y credenciales
+#Variables de entorno y credenciales
 .env
 .env.local
 .env.*
+!.env.example
+
 
 # Local release bundles and isolated Git integration copies
 dist/

@@ -1,3 +1,9 @@
-# Shell scripts must also run when Docker builds from a Windows checkout.
+# Shell scripts and Docker/Compose manifests must use LF across Windows and Linux checkouts.
+.gitattributes text eol=lf
+.env.example text eol=lf
 *.sh text eol=lf
 Dockerfile text eol=lf
+compose*.yaml text eol=lf
+.dockerignore text eol=lf
+requirements.txt text eol=lf
+*.py text eol=lf

@@ -1,9 +1,88 @@
-<section class="timeline" aria-label="Línea temporal de pasado, presente y futuro">
-  <div class="time-controls">
-    <div class="transport"><button id="step-back" aria-label="Retroceder un paso">◀</button><button id="play" aria-label="Reproducir evolución temporal">▶</button><button id="step-next" aria-label="Avanzar un paso">▶</button><select id="direction" aria-label="Dirección de reproducción"><option value="1">Hacia adelante</option><option value="-1">Hacia atrás</option></select><select id="speed" aria-label="Velocidad"><option value="1000">1×</option><option value="500">2×</option><option value="250">4×</option></select></div>
-    <div class="selected-time"><span id="time-kind" class="kind-label">PRESENTE</span><strong id="time-current">—</strong></div>
-    <div class="time-options"><label><span class="sr-only">Escala de navegación</span><select id="scale"><option value="hourly">Hora</option><option value="daily" selected>Día</option><option value="monthly">Mes</option><option value="yearly">Año</option></select></label><button id="zoom-out" aria-label="Alejar escala temporal">−</button><button id="zoom-in" aria-label="Acercar escala temporal">＋</button><label class="exact-date"><span class="sr-only">Fecha y hora UTC</span><input id="date" type="datetime-local" step="3600" title="Fecha y hora UTC"></label><details id="range-controls"><summary>Rango</summary><div class="range-popover"><label>Desde<input id="start" type="date" value="2000-01-01"></label><label>Hasta<input id="end" type="date" value="2024-12-31"></label><button id="apply-range">Analizar intervalo</button><p class="hint">El rango de análisis no limita el viaje temporal. Los productos conservan su cobertura y sus unidades.</p></div></details></div>
+<section class="timeline" aria-label="Tu viaje y línea temporal">
+  <div class="trip-bar">
+    <div class="trip-info">
+      <div class="trip-eyebrow-row">
+        <span class="trip-eyebrow">TU VIAJE</span>
+        <button id="btn-trip-config" type="button" class="trip-config-btn" title="Configurar fechas de tu viaje">Cambiar fechas</button>
+      </div>
+      <strong id="trip-range-label" class="trip-range-label">28 nov – 2 dic</strong>
+      <span id="trip-meta-label" class="trip-meta-label">5 días · Comodoro</span>
+      <div id="trip-popover" class="trip-popover" hidden>
+        <label>Inicio del viaje
+          <input id="trip-start-input" type="date">
+        </label>
+        <label>Duración (días)
+          <input id="trip-days-input" type="number" min="1" max="9" value="5">
+        </label>
+        <div class="trip-popover-actions">
+          <button id="btn-apply-trip" type="button" class="btn-primary-teal btn-sm">Aplicar</button>
+          <button id="btn-toggle-scrubber" type="button" class="btn-outline-teal btn-sm">Línea temporal histórica</button>
+        </div>
+      </div>
+    </div>
+    <div id="trip-days-strip" class="trip-days-strip" role="listbox" aria-label="Pronóstico de 9 días para tu viaje"></div>
   </div>
-  <div class="time-axis"><div id="axis-bands" aria-hidden="true"><div id="axis-past"></div><div id="axis-future"></div><div id="axis-climate"></div><span id="axis-now"></span></div><div id="time-markers" aria-label="Eventos y acontecimientos del intervalo"></div><input id="scrubber" type="range" min="0" max="10000" step="1" value="5000" aria-label="Viajar al pasado o al futuro"><div id="axis-ticks" aria-hidden="true"></div></div>
-  <div class="time-labels"><span id="time-start"></span><span class="time-legend"><i class="legend-historical"></i> Histórico <i class="legend-present"></i> Ahora <i class="legend-forecast"></i> Pronóstico <i class="legend-climate"></i> Climatología · UTC</span><span id="time-end"></span></div>
+
+  <div id="advanced-timeline" class="advanced-timeline" hidden>
+    <div class="time-controls">
+      <div class="transport">
+        <button id="step-back" aria-label="Retroceder un paso">◀</button>
+        <button id="play" aria-label="Reproducir evolución temporal">▶</button>
+        <button id="step-next" aria-label="Avanzar un paso">▶</button>
+        <select id="direction" aria-label="Dirección de reproducción">
+          <option value="1">Hacia adelante</option>
+          <option value="-1">Hacia atrás</option>
+        </select>
+        <select id="speed" aria-label="Velocidad">
+          <option value="1000">1×</option>
+          <option value="500">2×</option>
+          <option value="250">4×</option>
+        </select>
+      </div>
+      <div class="selected-time">
+        <span id="time-kind" class="kind-label">PRESENTE</span>
+        <strong id="time-current">—</strong>
+      </div>
+      <div class="time-options">
+        <label><span class="sr-only">Escala de navegación</span>
+          <select id="scale">
+            <option value="hourly">Hora</option>
+            <option value="daily" selected>Día</option>
+            <option value="monthly">Mes</option>
+            <option value="yearly">Año</option>
+          </select>
+        </label>
+        <button id="zoom-out" aria-label="Alejar escala temporal">−</button>
+        <button id="zoom-in" aria-label="Acercar escala temporal">＋</button>
+        <label class="exact-date"><span class="sr-only">Fecha y hora UTC</span>
+          <input id="date" type="datetime-local" step="3600" title="Fecha y hora UTC">
+        </label>
+        <details id="range-controls">
+          <summary>Rango</summary>
+          <div class="range-popover">
+            <label>Desde<input id="start" type="date" value="2000-01-01"></label>
+            <label>Hasta<input id="end" type="date" value="2024-12-31"></label>
+            <button id="apply-range">Analizar intervalo</button>
+            <p class="hint">El rango de análisis no limita el viaje temporal.</p>
+          </div>
+        </details>
+      </div>
+    </div>
+    <div class="time-axis">
+      <div id="axis-bands" aria-hidden="true">
+        <div id="axis-past"></div>
+        <div id="axis-future"></div>
+        <div id="axis-climate"></div>
+        <span id="axis-now"></span>
+      </div>
+      <div id="time-markers" aria-label="Eventos y acontecimientos del intervalo"></div>
+      <input id="scrubber" type="range" min="0" max="10000" step="1" value="5000" aria-label="Viajar al pasado o al futuro">
+      <div id="axis-ticks" aria-hidden="true"></div>
+    </div>
+    <div class="time-labels">
+      <span id="time-start"></span>
+      <span class="time-legend"><i class="legend-historical"></i> Histórico <i class="legend-present"></i> Ahora <i class="legend-forecast"></i> Pronóstico <i class="legend-climate"></i> Climatología · UTC</span>
+      <span id="time-end"></span>
+    </div>
+  </div>
 </section>
