@@ -1,5 +1,15 @@
 # EarthLens — estado y tareas del backend
 
+## Infraestructura predictiva, primera etapa — 21/11/2026
+
+Se agregó un contrato y un coordinador offline, una proyección SQLite de solo
+lectura para HTTP y la migración y el adaptador de cargas offline de BigQuery.
+Se conservan el pronóstico operativo, los gráficos y los endpoints de Time
+Machine. El proveedor TimesFM 3.0 y la automatización siguen deshabilitados.
+Quedan pendientes el transporte a BigQuery, las reservas duraderas en nube,
+la publicación de proyecciones por instancia y la validación científica.
+[Arquitectura, API y configuración futura](../architecture/prediction-infrastructure.md)
+
 ## Auditoría histórica antes de TimesFM — 21/11/2026
 
 Cambios locales en `feature/backend-api`. Se repararon la resolución temporal
