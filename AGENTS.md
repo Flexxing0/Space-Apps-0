@@ -1,5 +1,8 @@
 # EarthLens — contexto e instrucciones del proyecto
 
+La [estructura y el inventario de movimientos](docs/architecture/project-structure.md)
+documentan la reorganización en la rama `refactor/project-structure`.
+
 ## Corrección prioritaria de interfaz — vigente
 
 **EarthLens es Time Machine.** `/`, `/index.html` y `/time-machine` deben abrir
@@ -9,18 +12,18 @@ cerrados al iniciar y desplegados a pedido; calendario, eventos, perfiles y avis
 comparten ciudad/fecha con la herramienta. La timeline mantiene un viewport
 independiente del rango de análisis y de los límites del proveedor.
 
-`services/time_navigation.py` y `GET /api/workspace/frame` resuelven el producto
+`services/workspace/time_navigation.py` y `GET /api/workspace/frame` resuelven el producto
 según fecha/variable/escala, reutilizando servicios existentes. No arrastrar valores
 antiguos a fechas futuras, no ocultar nulos y no convertir un fallo de proveedor
 en climatología. Meteorología, históricos y referencia climatológica se distinguen.
 
 TimesFM 3.0 **no está implementado**: capacidades deshabilitadas y arnés de
-backtesting no equivalen a inferencia. Auditoría: `scripts/audit_timesfm.py`.
+backtesting no equivalen a inferencia. Auditoría: `scripts/audit/audit_timesfm.py`.
 El pronóstico operativo debe funcionar independientemente de ese modelo.
 
-La aceptación vigente es `scripts/check_time_machine_acceptance.py`: Chrome real,
+La aceptación vigente es `scripts/audit/check_time_machine_acceptance.py`: Chrome real,
 datos reales A–F y simulación G sólo en base temporal. H no se aprueba con mocks.
-Informe, capturas, archivos y límites: [docs/time-machine-correction.md](docs/time-machine-correction.md).
+Informe, capturas, archivos y límites: [docs/architecture/time-machine-correction.md](docs/architecture/time-machine-correction.md).
 
 ## Reestructuración vigente — 15/11/2026
 
@@ -29,10 +32,10 @@ geográfica para investigación y planificación, exclusiva de Argentina. Esloga
 **EarthLens — Comprendé el pasado. Anticipá el futuro.** El trabajo se hace en
 `feature/backend-api`, sin commits ni push. Este alcance amplía las etapas antiguas
 sin eliminar proveedores, motor o interfaces del equipo. Estado comprobado y
-pendientes: [EARTHLENS_ROADMAP.md](EARTHLENS_ROADMAP.md).
-Contrato y operación: [docs/workspace.md](docs/workspace.md).
+pendientes: [docs/project/EARTHLENS_ROADMAP.md](docs/project/EARTHLENS_ROADMAP.md).
+Contrato y operación: [docs/architecture/workspace.md](docs/architecture/workspace.md).
 
-- `/time-machine`: `workspace.html`, mapa/timeline/calendario/eventos sincronizados.
+- `/time-machine`: `pages/workspace.html`, mapa/timeline/calendario/eventos sincronizados.
   La interfaz anterior sigue en `/time-machine/legacy`.
 - Navegación principal: Inicio, Time Machine, Ciudades, Laboratorio, Mi espacio,
   Fuentes científicas. Las herramientas originales siguen en el Laboratorio.
@@ -42,7 +45,7 @@ Contrato y operación: [docs/workspace.md](docs/workspace.md).
 - SQLite (`data/runtime/earthlens.sqlite3`) conserva usuarios/eventos, preferencias,
   versiones meteorológicas, evaluaciones, notificaciones y ejecuciones. CSRF y
   permisos por propietario son obligatorios. No hay usuario compartido global.
-- `scripts.monitor_events.py` funciona independientemente de Flask; perfil Compose
+- `scripts.maintenance.monitor_events.py` funciona independientemente de Flask; perfil Compose
   `monitoring`. No enviar avisos externos sin consentimiento y configuración.
 - Compatibilidad con umbrales explícitos del usuario. Sin criterios o datos,
   insuficiencia. SMN desconocido no equivale a ausencia de alertas. Una evaluación
@@ -63,7 +66,7 @@ estado actual consultar los documentos de reestructuración y la evidencia del c
 
 Este archivo aplica a todo el repositorio. Describe el contexto y las reglas de
 trabajo; el estado de las tareas y sus dependencias se mantiene en
-[BACKEND_TASKS.md](BACKEND_TASKS.md). Revisar el código antes de dar una tarea por
+[docs/project/BACKEND_TASKS.md](docs/project/BACKEND_TASKS.md). Revisar el código antes de dar una tarea por
 completada. Los componentes propuestos en estos documentos no implican que existan.
 
 ## Contexto, objetivos y responsabilidades
@@ -89,7 +92,7 @@ completada. Los componentes propuestos en estos documentos no implican que exist
 Las siguientes son funcionalidades objetivo. Actualmente existen el proveedor y
 normalizador NASA POWER, el catálogo argentino, la caché local y la obtención masiva;
 también existen la API HTTP, el frontend Flask y la integración del motor del equipo
-para análisis exploratorios. Ver `docs/integration.md` para el contrato inspeccionado
+para análisis exploratorios. Ver `docs/architecture/integration.md` para el contrato inspeccionado
 y sus limitaciones; la revisión metodológica conjunta sigue pendiente.
 
 | Funcionalidad | Alcance previsto | Estado de la funcionalidad completa |
@@ -142,18 +145,18 @@ tests/
   test_city_catalog_builder.py
   test_power_provider.py
   test_power_provider_live.py
-test_nasa.py
-docs/nasa-power.md
-docs/bulk-power.md
-docs/api.md
-docs/docker.md
+scripts/audit/probe_nasa_power.py
+docs/science/nasa-power.md
+docs/science/bulk-power.md
+docs/architecture/api.md
+docs/operations/docker.md
 data/cities.json
 data/cache/.gitignore
-scripts/build_city_catalog.py
-scripts/fetch_power.py
+scripts/data/build_city_catalog.py
+scripts/data/fetch_power.py
 ```
 
-Flujo actual: un consumidor Python o `scripts/fetch_power.py` selecciona ciudades
+Flujo actual: un consumidor Python o `scripts/data/fetch_power.py` selecciona ciudades
 argentinas y llama a `PowerBulkService`; el servicio reutiliza cachés válidas o
 consulta el proveedor multivariable, que normaliza la respuesta NASA. Los consumidores
 existentes también pueden seguir usando directamente `get_data()` y `get_data_multi()`.
@@ -189,7 +192,7 @@ obtención y caché no se duplica en las rutas.
 
 ### Normalización actual
 
-`services/normalizer.py` ordena los registros, conserva los meses `01` a `12`, excluye
+`services/providers/normalizer.py` ordena los registros, conserva los meses `01` a `12`, excluye
 el registro anual `YYYY13` y convierte el valor de relleno informado por NASA en
 `None`. Conserva los ceros y nulos existentes; no interpola ni crea meses ausentes.
 
@@ -203,21 +206,21 @@ como mediciones de una estación local.
 - `data/cities.json` contiene las 25 ciudades acordadas, con ID estable, nombre,
   provincia/jurisdicción, región, país, coordenadas y procedencia GeoRef. Conserva
   el registro oficial, ID de entidad, consulta y fecha de obtención del centroide.
-- `services/cities.py` ofrece `list_cities(province=None, region=None)` y
+- `services/geography/cities.py` ofrece `list_cities(province=None, region=None)` y
   `get_city(city_id)`; este último devuelve `None` para un ID inexistente. La cantidad
   de localidades no está fijada en el cargador. Los filtros admiten tildes/caso
   indistintos, ID provincial y alias documentados como `CABA` y `centro-pampeana`.
 - Las regiones son la agrupación definida por el proyecto: Patagonia, Centro y
   región pampeana, Cuyo, NOA y NEA; no atribuir esta clasificación a GeoRef.
-- `scripts/build_city_catalog.py` permite reconstruir el catálogo con una consulta
+- `scripts/data/build_city_catalog.py` permite reconstruir el catálogo con una consulta
   por lotes a GeoRef. No ejecutar la reconstrucción automáticamente al importar módulos.
-- `services/bulk.py` ofrece `PowerBulkService.collect_city()`, `collect_cities()` y
+- `services/providers/bulk.py` ofrece `PowerBulkService.collect_city()`, `collect_cities()` y
   `plan_cities()`. Permite seleccionar un ID, un subconjunto, provincia, región o
   catálogo completo. El período por defecto es **2000–2024**, configurable.
 - Cada ubicación remota usa una petición con las seis variables del proveedor
   existente. Las consultas son secuenciales, con intervalo mínimo configurable de
   un segundo por defecto; los fallos se informan por ubicación y no detienen el lote.
-- `services/cache.py` almacena JSON en `data/cache/power/`, ignorado por Git mediante
+- `services/providers/cache.py` almacena JSON en `data/cache/power/`, ignorado por Git mediante
   `data/cache/.gitignore`. La clave distingue proveedor, dataset, endpoint, comunidad,
   frecuencia, coordenadas, variables y período. Conserva series, unidades, metadatos,
   ubicación y fechas de obtención en UTC.
@@ -230,13 +233,13 @@ como mediciones de una estación local.
 - Las escrituras usan reemplazo atómico. Una respuesta fallida/incompleta no
   sobrescribe una caché válida. Un refresco fallido se informa como error con
   `cache_preserved`, sin presentar los datos anteriores como una descarga nueva.
-- `scripts/fetch_power.py` exige una selección explícita. `--dry-run` sólo muestra
-  el plan; no consulta NASA ni escribe cachés. Ver [docs/bulk-power.md](docs/bulk-power.md).
+- `scripts/data/fetch_power.py` exige una selección explícita. `--dry-run` sólo muestra
+  el plan; no consulta NASA ni escribe cachés. Ver [docs/science/bulk-power.md](docs/science/bulk-power.md).
 
 ## Validación territorial: estado y límite actual
 
 Las ciudades del catálogo se respaldan en localidades argentinas de GeoRef. Para
-coordenadas libres, `services/geography.py` define `TerritoryEvidence` y el contrato
+coordenadas libres, `services/geography/geography.py` define `TerritoryEvidence` y el contrato
 de un validador inyectable de límites oficiales. `collect_location()` admite una
 ubicación fuera del catálogo sólo con evidencia de pertenencia a Argentina.
 
@@ -252,7 +255,7 @@ No habilitar una ruta de coordenadas libres que eluda esta validación.
 
 ## API REST básica disponible
 
-Contrato y ejemplos para frontend: [docs/api.md](docs/api.md).
+Contrato y ejemplos para frontend: [docs/architecture/api.md](docs/architecture/api.md).
 
 - `GET /api/health`: disponibilidad del proceso HTTP, sin sondear NASA.
 - `GET /api/variables`: códigos, nombres, unidades de catálogo y fuentes.
@@ -273,7 +276,7 @@ coordenadas libres ni aceptar parámetros de configuración desde el cuerpo HTTP
 
 Frontend y API comparten origen; CORS permanece desactivado. Si el equipo define
 orígenes distintos, acordar una lista explícita antes de habilitarlo. No aplicar
-un comodín. `static/js/api.js` consume el contrato documentado en `docs/api.md`.
+un comodín. `static/js/shared/api.js` consume el contrato documentado en `docs/architecture/api.md`.
 
 ## Docker para desarrollo local
 
@@ -289,15 +292,15 @@ caché original de POWER. No copiar cachés científicas ni credenciales a la im
 No sustituir ese montaje por un volumen vacío que oculte datos ya obtenidos.
 
 Las 71 pruebas originales siguen intactas. La suite ampliada y las páginas se
-verificaron dentro de Docker y con Chrome real; ver `BACKEND_TASKS.md`.
+verificaron dentro de Docker y con Chrome real; ver `docs/project/BACKEND_TASKS.md`.
 El lote completo de 25 ciudades para 2000–2024 se ejecutó por indicación explícita
 del usuario: 25 aciertos de caché, 150 series, 45.000 valores mensuales disponibles,
 sin faltantes ni fallos; no se hicieron descargas nuevas. Se verificó que las 25
 cachés anteriores conservaran sus hashes y fechas de obtención.
 
-Guía y comandos: [docs/docker.md](docs/docker.md). Frontend y motor se incorporaron
+Guía y comandos: [docs/operations/docker.md](docs/operations/docker.md). Frontend y motor se incorporaron
 desde las ramas del equipo sin reemplazar el proveedor ni su caché. Diagnóstico e
-inventario Docker: [docs/integration.md](docs/integration.md).
+inventario Docker: [docs/architecture/integration.md](docs/architecture/integration.md).
 
 ## Arquitectura prevista — todavía pendiente
 
@@ -324,14 +327,14 @@ uso. Evaluar SWOT como recurso complementario, incluyendo Hydrocron como posible
 vía de acceso. Estas prioridades no equivalen a integraciones terminadas.
 
 NASA POWER mantiene el acceso meteorológico y estadístico existente. La capa
-aditiva `services/scientific.py` y el adaptador MODIS/ORNL conservan series nativas
+aditiva `services/science/scientific.py` y el adaptador MODIS/ORNL conservan series nativas
 separadas; su disponibilidad depende de observaciones reales verificadas en caché.
 GLDAS_NOAH025_M 2.1 tiene extracción puntual OPeNDAP verificada para las tres
 ciudades piloto en 2024: 15 series y 180 registros disponibles, sin faltantes.
 Giovanni in the Cloud se verificó con una serie real y ofrece un adaptador
 mensual para ampliar históricos. Sus CSV pueden venir redondeados: se separan
 de NetCDF por revisión/política de caché y se conserva esa limitación de precisión.
-Consultar [docs/scientific-sources.md](docs/scientific-sources.md) y los informes
+Consultar [docs/science/scientific-sources.md](docs/science/scientific-sources.md) y los informes
 locales para cobertura y limitaciones reales. MERRA-2 figura en el contrato POWER;
 no hay un cliente directo de MERRA-2. Giovanni es una vía de acceso/análisis
 verificada mediante servicios oficiales NASA Earthdata; no tratarlo como un dataset
@@ -380,7 +383,7 @@ Ejecutar desde la raíz, en PowerShell:
 
 La suite sin red usa valores sintéticos identificados como tales. La prueba real de
 NASA POWER es optativa: requiere `EARTHLENS_POWER_LIVE=1`, acceso a Internet y hace
-dos consultas. Ver instrucciones en [docs/nasa-power.md](docs/nasa-power.md).
+dos consultas. Ver instrucciones en [docs/science/nasa-power.md](docs/science/nasa-power.md).
 Un resultado `skipped` no equivale a una verificación de red satisfactoria.
 
 Las pruebas de catálogo, caché, selección masiva y geografía son sin red. El lote de
@@ -388,34 +391,34 @@ Las pruebas de catálogo, caché, selección masiva y geografía son sin red. El
 limitó a tres ciudades; en la etapa Docker se ejecutó el lote de 25 con cachés
 preexistentes verificadas, sin solicitudes nuevas. No forzar una actualización
 completa por iniciativa propia; reutilizar la caché conforme a la tarea autorizada.
-Los comandos están en `docs/bulk-power.md` y `docs/docker.md`.
+Los comandos están en `docs/science/bulk-power.md` y `docs/operations/docker.md`.
 Las pruebas de API usan el cliente Flask, NASA simulada y cachés temporales; no
 consultan proveedores reales. Las verificaciones adicionales pueden leer la caché
 real existente bloqueando la red y comprobando que no se modifique.
 
-`test_nasa.py` es un script manual que consulta NASA al ejecutarse o importarse;
+`scripts/audit/probe_nasa_power.py` es un script manual que consulta NASA al ejecutarse o importarse;
 evitar importarlo como parte de verificaciones sin red. Mantener la separación
 entre pruebas automáticas de contrato y comprobaciones reales de los proveedores.
 
 Al completar trabajo autorizado, actualizar el estado y las dependencias en
-`BACKEND_TASKS.md`, citar los archivos que lo respaldan e informar qué se verificó
+`docs/project/BACKEND_TASKS.md`, citar los archivos que lo respaldan e informar qué se verificó
 y qué quedó pendiente. No marcar una funcionalidad de producto como completada
 por disponer solamente de su proveedor de datos.
 
 
 ## Integración de frontend y motor — contrato vigente
 
-`services/trend_analysis.py` conserva el motor de `origin/results-charts` e33c76d;
-`services/analysis_service.py` adapta series mensuales reales a sus entradas y
+`services/science/trend_analysis.py` conserva el motor de `origin/results-charts` e33c76d;
+`services/science/analysis_service.py` adapta series mensuales reales a sus entradas y
 mantiene unidades, metadatos, cobertura y fechas. El motor requiere SciPy y aplica
 medias aritméticas anuales con mínimo 9 meses válidos, 3 años y 70% de cobertura.
 La comparación exige idénticas unidades y años válidos. No reemplazar el motor
 ni activar proveedores con respaldo sintético.
 
 Las misiones originales de `origin/datasets-missions` fbd7d0a se conservan en
-`services/guided_missions.py`, catálogos separados y su interfaz. Su agregador
+`services/science/guided_missions.py`, catálogos separados y su interfaz. Su agregador
 anual alternativo permanece disponible como código del compañero y pruebas; no
-se usa en el flujo estadístico actual. `services/mission_service.py` proyecta el
+se usa en el flujo estadístico actual. `services/science/mission_service.py` proyecta el
 catálogo al método y las unidades vigentes y usa IDs de ciudades verificadas.
 
 `tests/statistics_fixtures/` y `tests/data/` contienen recursos heredados sólo para
@@ -423,24 +426,24 @@ pruebas de software. La aplicación no usa esas muestras ni genera series de
 respaldo. Los scripts `check_cached_integration.py` y `check_web.py` verifican
 respectivamente las cachés reales con NASA bloqueada y el flujo de navegador.
 
-Consultar `docs/integration.md` antes de ampliar métodos, misiones o resultados.
-Earth Radar y Earth Fingerprint tienen backend provisional, según `docs/products.md`.
+Consultar `docs/architecture/integration.md` antes de ampliar métodos, misiones o resultados.
+Earth Radar y Earth Fingerprint tienen backend provisional, según `docs/architecture/products.md`.
 La falta de corrección de autocorrelación y comparaciones múltiples impide tratar
 este análisis exploratorio como un servicio de descubrimientos confirmados.
 
 
 ## Contrato común y productos provisionales
 
-`services/analysis_results.py` define el contrato común v1 y los indicadores de las
+`services/science/analysis_results.py` define el contrato común v1 y los indicadores de las
 seis variables; `AnalysisService.results()` reutiliza el motor y la obtención
 existentes. No agregar regresiones alternativas. `statistics` conserva lo recibido;
 `statistics_unrounded` queda reservado para la salida completa del compañero,
 actualmente ausente. Todos los análisis calculados son científicamente
 `provisional`, aunque `data_status` sea `valid`.
 
-`services/fingerprint.py` produce perfiles y verifica compatibilidad descriptiva.
-`services/radar.py` define la familia completa del catálogo x seis variables y
-persiste sus resultados. `scripts/generate_radar.py` es siempre cache-only; nunca
+`services/science/fingerprint.py` produce perfiles y verifica compatibilidad descriptiva.
+`services/science/radar.py` define la familia completa del catálogo x seis variables y
+persiste sus resultados. `scripts/maintenance/generate_radar.py` es siempre cache-only; nunca
 actualiza observaciones. El artefacto derivado vive en `data/cache/radar/latest.json`
 y se escribe atómicamente con integridad SHA-256, fuera de `power/`.
 
@@ -456,10 +459,10 @@ bajo coordinación de B06. Los perfiles no contienen puntuaciones arbitrarias.
 ## Interfaces de producto — fase 1
 
 El usuario autorizó las interfaces de Radar/Fingerprint y su incorporación a la
-navegación. `templates/_navigation.html` es la navegación compartida; conservar
+navegación. `templates/components/_navigation.html` es la navegación compartida; conservar
 el enlace del Inicio al Explorador que mantiene la ciudad seleccionada.
-Las vistas viven en `templates/radar.html`, `templates/fingerprint.html`,
-`static/css/products.css` y `static/js/{products,radar,fingerprint}.js`.
+Las vistas viven en `templates/pages/radar.html`, `templates/pages/fingerprint.html`,
+`static/css/pages/products.css` y `static/js/{products,radar,fingerprint}.js`.
 No calculan estadísticas: presentan el contrato común y sus series anuales.
 La selección rápida utiliza AbortController y un número de secuencia para impedir
 que respuestas anteriores reemplacen la vista actual.
@@ -470,14 +473,14 @@ disponibilidad completa y ausencia de incoherencias. No introducir gráficos
 radiales ni normalizaciones sin metodología acordada. El período de la interfaz
 es el cacheado 2000–2024; Radar no modifica la familia al filtrar.
 
-Ver `docs/products.md`, `tests/test_product_pages.py` y el verificador optativo
-`scripts/check_product_pages.py`. Los proveedores nuevos requieren documentación
+Ver `docs/architecture/products.md`, `tests/browser/test_product_pages.py` y el verificador optativo
+`scripts/audit/check_product_pages.py`. Los proveedores nuevos requieren documentación
 oficial y observaciones reales antes de habilitarse; no quedan incorporados a estas
 interfaces por aparecer en el catálogo multiproveedor.
 
 ## Recuperación y capa multiproveedor — noviembre de 2026
 
-`scripts/initialize_data.py` permite inicializar una instalación nueva: reutiliza
+`scripts/maintenance/initialize_data.py` permite inicializar una instalación nueva: reutiliza
 POWER, descarga sólo las cachés faltantes, audita unidades/cobertura y regenera
 Radar mediante su generador cache-only. No amplía su familia de 150 pruebas.
 Si fallan datos o análisis, conserva el artefacto anterior. La recuperación del
@@ -519,7 +522,7 @@ la familia de 150 pruebas de Radar. La revisión metodológica continúa pendien
   la proyección gráfica. Los originales permanecen intactos; no se acumula lluvia.
 - MODIS `MOD13Q1`: piloto REST 2024 de 3 ciudades, 6 series/138 registros,
   56 aceptados y 82 excluidos por QA. Las órdenes históricas ORNL se gestionan
-  mediante `scripts/order_modis.py`, con contacto sólo en memoria. Una orden
+  mediante `scripts/data/order_modis.py`, con contacto sólo en memoria. Una orden
   aceptada no equivale a una descarga verificada: consultar su estado y validar
   CSV, colección por gránulo, píxel, fechas y QA antes de publicar las series.
 - SWOT Hydrocron: tramo argentino `65341000051`, río Chubut cerca de Trelew,
@@ -528,36 +531,36 @@ la familia de 150 pruebas de Radar. La revisión metodológica continúa pendien
   ciudad, no usa el OLS mensual y sus banderas requieren revisión. No hay lagos
   argentinos verificados todavía. Catálogo: `data/water_features.json`.
 
-`services/hydrology.py` y `/api/science/water-*` conservan el contrato hidrológico
+`services/science/hydrology.py` y `/api/science/water-*` conservan el contrato hidrológico
 independiente. `/api/science/compare` es descriptivo. El panel compartido en
-`templates/_scientific_panel.html`, `static/js/scientific.js` y
-`static/css/scientific.css` presenta datos reales en Explorador, Comparador,
+`templates/components/_scientific_panel.html`, `static/js/products/scientific.js` y
+`static/css/components/scientific.css` presenta datos reales en Explorador, Comparador,
 Radar, Fingerprint y Modo detective, y en `/sources`. Se carga al abrirlo;
 los gráficos respetan fechas nativas, huecos y unidades. El recorrido histórico
 del deslizador no hace consultas nuevas. No sustituye los análisis o misiones
 existentes ni crea relaciones causales.
 
 Time Machine se incorporó desde `origin/main` ce9a1e2 durante el merge autorizado.
-`/time-machine` y `/api/time-machine` usan `services/time_machine_service.py`,
+`/time-machine` y `/api/time-machine` usan `services/workspace/time_machine_service.py`,
 cachés POWER verificadas y funciones aditivas del motor del equipo. El núcleo
 anterior del motor se conserva sin cambios. La interpretación es provisional;
 la familia de Radar no se amplía. No habilitar muestras de respaldo, ajustes
 espaciales artificiales, coordenadas libres ni cuadrantes sin datos/validación.
 El código anterior que dependía del servidor alternativo y sus muestras queda
 como referencia de migración en `tests/statistics_fixtures/main_legacy/`, fuera
-del flujo de producción. Ver `docs/merge-main.md` y `docs/time-machine-integration.md`.
+del flujo de producción. Ver `docs/history/merge-main.md` y `docs/architecture/time-machine-integration.md`.
 El usuario confirmó que Earth Connections todavía no existe. La extensión de
 Time Machine a las otras fuentes depende de su metodología y contrato; Connections
 depende de disponer de su código.
 
-La actualización `4157789` incorpora el modelo `services/forecast.py`, adaptado
-en `services/forecast_service.py` a históricos POWER cacheados por ciudad.
+La actualización `4157789` incorpora el modelo `services/prediction/forecast.py`, adaptado
+en `services/prediction/forecast_service.py` a históricos POWER cacheados por ciudad.
 Son extrapolaciones OLS/t de Student provisionales, no TimesFM ni observaciones
 futuras. Conservar unidades, procedencia y separación del histórico; no aceptar
 series arbitrarias del cliente ni presentar causalidad o heurísticas de confianza
-como validación científica. Ver `docs/merge-forecast.md`.
+como validación científica. Ver `docs/history/merge-forecast.md`.
 
-`scripts/audit_science.py` audita las cachés sin red, agrupando versiones, vías
+`scripts/audit/audit_science.py` audita las cachés sin red, agrupando versiones, vías
 de acceso y períodos para evitar contabilizar pilotos y proyecciones dos veces.
-`scripts/check_scientific_pages.py` verifica con Chrome real las cinco interfaces,
+`scripts/audit/check_scientific_pages.py` verifica con Chrome real las cinco interfaces,
 gráficos, comparación, QA, recorrido histórico y descarte de respuestas tardías.

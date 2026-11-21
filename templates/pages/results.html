@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EarthLens · Resultados del Análisis Estadístico</title>
+  <!-- Bootstrap 5 CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <!-- Estilos compartidos (Rol 01) y específicos de Resultados/Comparador (Rol 03) -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/global/styles.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/results.css') }}" />
+</head>
+<body>
+  <!-- Navegación principal según estructura de la Página 1 del PDF -->
+  {% include "components/_navigation.html" %}
+
+  <main class="container py-4 flex-grow-1">
+    <!-- Banner de estado de datos (etiquetado claro de datos de prueba según Página 2) -->
+    <div id="dataModeBanner" class="data-mode-banner mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div id="dataModeText">
+        Consultando datos reales de NASA POWER…</div>
+      <span id="resultsLoadingSpinner" class="spinner-border spinner-border-sm text-warning d-none" role="status"></span>
+    </div>
+
+    <!-- Barra rápida de consulta y cambio de variable MVP -->
+    <section class="card border-0 shadow-sm mb-4">
+      <div class="card-body">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label for="quickLocationSelect" class="form-label small fw-semibold text-secondary mb-1">
+              Ubicación de referencia
+            </label>
+            <select id="quickLocationSelect" class="form-select form-select-sm">
+              <option value="comodoro" selected>Comodoro Rivadavia, Chubut (-45.86, -67.50)</option>
+              <option value="bariloche">San Carlos de Bariloche (-41.13, -71.31)</option>
+              <option value="ushuaia">Ushuaia, Tierra del Fuego (-54.80, -68.30)</option>
+              <option value="riogallegos">Río Gallegos, Santa Cruz (-51.62, -69.22)</option>
+              <option value="madryn">Puerto Madryn, Chubut (-42.77, -65.03)</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label for="quickVariableSelect" class="form-label small fw-semibold text-secondary mb-1">
+              Variable NASA POWER (MVP)
+            </label>
+            <select id="quickVariableSelect" class="form-select form-select-sm">
+              <option value="T2M" selected>T2M · Temperatura media (°C)</option>
+              <option value="PRECTOTCORR">PRECTOTCORR · Precipitaciones (mm/día)</option>
+              <option value="RH2M">RH2M · Humedad relativa (%)</option>
+              <option value="WS2M">WS2M · Velocidad del viento (m/s)</option>
+              <option value="T2M_MAX">T2M_MAX · Temperatura máxima (°C)</option>
+              <option value="T2M_MIN">T2M_MIN · Temperatura mínima (°C)</option>
+            </select>
+          </div>
+          <div class="col-6 col-md-2">
+            <label for="quickStartYear" class="form-label small fw-semibold text-secondary mb-1">Año inicio</label>
+            <input type="number" id="quickStartYear" class="form-control form-control-sm" value="2000" min="1981" max="2023" />
+          </div>
+          <div class="col-6 col-md-2">
+            <label for="quickEndYear" class="form-label small fw-semibold text-secondary mb-1">Año fin</label>
+            <input type="number" id="quickEndYear" class="form-control form-control-sm" value="2024" min="1985" max="2025" />
+          </div>
+          <div class="col-md-2 d-grid">
+            <button id="btnUpdateResults" type="button" class="btn btn-primary btn-sm fw-semibold">
+              Analizar serie
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+<div id="results-output" hidden>
+
+    <!-- Cabecera de la investigación actual -->
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+      <div>
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+          <span id="resVariableBadge" class="badge bg-primary">Temperatura media a 2m (T2M)</span>
+          <span id="resPeriodBadge" class="badge bg-secondary">Período: 2000 – 2024</span>
+        </div>
+        <h1 id="resLocationTitle" class="h3 fw-bold mb-1">Comodoro Rivadavia, Chubut</h1>
+        <p class="text-muted small mb-0">
+          <span id="resCoordinates">Lat: -45.86° · Lon: -67.50°</span>
+          <span class="mx-2">|</span>
+          Fuente: <strong id="resSourceText">NASA POWER / MERRA-2</strong>
+        </p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a href="explorer.html" class="btn btn-outline-secondary btn-sm">
+          ← Volver al Explorador
+        </a>
+        <a id="btnGoToCompare" href="compare.html" class="btn btn-outline-primary btn-sm fw-semibold">
+          ⚖️ Comparar con otra ubicación
+        </a>
+        <button id="btnExportCSV" type="button" class="btn btn-success btn-sm fw-semibold">
+          ⬇ Descargar CSV
+        </button>
+      </div>
+    </div>
+
+    <!-- Conclusión principal basada en reglas estadísticas -->
+    <section id="resConclusionBox" class="conclusion-box mb-4">
+      <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-1">
+        <span class="text-uppercase small fw-bold text-primary">Conclusión Estadística del Período</span>
+        <span id="metricSigBadge" class="badge rounded-pill badge-sig-yes">Evidencia significativa (p &lt; 0.05)</span>
+      </div>
+      <p id="resConclusionText" class="mb-0 fs-6 fw-medium">
+        Se detectó una tendencia ascendente estadísticamente significativa...
+      </p>
+    </section>
+
+    <!-- Tarjetas de métricas estadísticas (Pendiente, Cambio total, p-valor, Dirección/IC) -->
+    <section class="row g-3 mb-4">
+      <div class="col-sm-6 col-lg-3">
+        <div class="metric-card">
+          <div class="metric-label">Pendiente Lineal (Slope)</div>
+          <div id="metricSlope" class="metric-value">+0.0350 °C/año</div>
+          <div id="metricDecade" class="metric-sub">Cambio por década: +0.350 °C/década</div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="metric-card">
+          <div class="metric-label">Magnitud del Cambio Total</div>
+          <div id="metricTotalChange" class="metric-value">+0.84 °C</div>
+          <div id="metricTotalSub" class="metric-sub">Cambio estimado entre 2000 y 2024</div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="metric-card">
+          <div class="metric-label">Significancia (p-valor)</div>
+          <div id="metricPValue" class="metric-value">0.0120</div>
+          <div class="metric-sub">Umbral científico α = 0.05 (regresión OLS)</div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <div class="metric-card">
+          <div class="metric-label">Dirección e Incertidumbre</div>
+          <div id="metricDirection" class="metric-value fs-5">📈 Tendencia Ascendente ↑</div>
+          <div id="metricConfidence" class="metric-sub">IC 95% pendiente: [+0.012, +0.058]</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Panel del Gráfico Principal (Serie Histórica + Línea de Regresión) -->
+    <section class="chart-panel mb-4">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div>
+          <h2 class="h5 fw-bold mb-0">Serie Histórica Anual y Línea de Regresión Lineal</h2>
+          <p class="text-muted small mb-0">
+            Puntos observados por año y ajuste de mínimos cuadrados ordinarios ($y = mx + b$).
+          </p>
+        </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="toggleConfidenceBand" checked />
+          <label class="form-check-label small text-secondary" for="toggleConfidenceBand">
+            Mostrar banda de confianza (95%)
+          </label>
+        </div>
+      </div>
+      <div class="chart-canvas-wrapper">
+        <canvas id="resultsTrendChart"></canvas>
+      </div>
+    </section>
+
+    <!-- Nota metodológica y Tabla de datos anuales -->
+    <div class="row g-4">
+      <div class="col-lg-5">
+        <div class="methodology-note h-100">
+          <h3 class="h6 fw-bold text-dark mb-2">📌 Nota metodológica e interpretación</h3>
+          <ul class="mb-0 ps-3 small">
+            <li class="mb-1">
+              <strong>Cambio por década:</strong> se calcula como $\text{pendiente} \times 10$.
+            </li>
+            <li class="mb-1">
+              <strong>Cambio total en el período:</strong> $\text{pendiente} \times (\text{año}_{\text{fin}} - \text{año}_{\text{inicio}})$.
+            </li>
+            <li class="mb-1">
+              <strong>Interpretación del $p\text{-valor}$:</strong> un $p &lt; 0.05$ sugiere evidencia estadística de tendencia bajo los supuestos del modelo lineal; un valor mayor no demuestra ausencia de cambio.
+            </li>
+            <li>
+              <strong>Resolución espacial:</strong> NASA POWER (MERRA-2) representa promedios en celdas geográficas satelitales (~0.5° × 0.625°), no estaciones meteorológicas puntuales. Correlación no implica causalidad.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+            <span class="fw-semibold small text-uppercase text-secondary">Serie Anual de Datos y Valores Ajustados</span>
+            <button
+              class="btn btn-sm btn-link text-decoration-none"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#collapseSeriesTable"
+              aria-expanded="false"
+            >
+              Mostrar / ocultar tabla
+            </button>
+          </div>
+          <div id="collapseSeriesTable" class="collapse show">
+            <div class="table-responsive" style="max-height: 260px; overflow-y: auto;">
+              <table class="table table-sm table-hover table-scientific mb-0 align-middle">
+                <thead class="sticky-top">
+                  <tr>
+                    <th>Año</th>
+                    <th>Valor Observado</th>
+                    <th>Recta de Regresión</th>
+                    <th>Anomalía vs Media</th>
+                  </tr>
+                </thead>
+                <tbody id="seriesTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </main>
+
+  <footer class="bg-white border-top py-3 mt-5">
+    <div class="container d-flex flex-wrap justify-content-between align-items-center small text-muted">
+      <span>EarthLens · NASA Space Apps Challenge 2026 · Be An Earth System Trend Detective!</span>
+      <span>Módulo 03: Resultados y Comparador (Chart.js + Contrato JSON)</span>
+    </div>
+  </footer>
+
+  <!-- Bootstrap 5 JS + Chart.js 4 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <!-- Scripts del Rol 03 -->
+  <script src="{{ url_for('static', filename='js/shared/api.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/shared/charts.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/exploration/results.js') }}"></script>
+</body>
+</html>

@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 import re
 from threading import Lock
 
-from services import cities
-from services.bulk import DEFAULT_END_YEAR, DEFAULT_START_YEAR, validate_period
+from services.geography import cities
+from services.providers.bulk import DEFAULT_END_YEAR, DEFAULT_START_YEAR, validate_period
 from services.providers import power
 
 

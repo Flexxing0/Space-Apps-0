@@ -134,7 +134,7 @@ def compare():
 
 @api.get("/missions")
 def missions():
-    from services.guided_missions import list_missions, list_hypotheses
+    from services.science.guided_missions import list_missions, list_hypotheses
     query_parameters()
     result = list_missions()
     return success(result, meta={"count": len(result), "hypotheses": list_hypotheses()})
@@ -142,7 +142,7 @@ def missions():
 
 @api.get("/missions/<mission_id>")
 def mission(mission_id):
-    from services.mission_service import mission_detail
+    from services.science.mission_service import mission_detail
     from flask import abort
     query_parameters()
     result = mission_detail(mission_id, service())
@@ -153,14 +153,14 @@ def mission(mission_id):
 
 @api.get("/catalog")
 def guided_catalog():
-    from services.mission_service import catalog
+    from services.science.mission_service import catalog
     query_parameters()
     return success(catalog())
 
 
 @api.get("/variables/recommend")
 def recommend_variables():
-    from services.mission_service import recommendations
+    from services.science.mission_service import recommendations
     filters = query_parameters(("phenomenon",))
     return success(recommendations(filters.get("phenomenon")))
 

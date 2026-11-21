@@ -2,7 +2,7 @@
 from flask import Blueprint, current_app, request, Response
 from api.responses import success
 from services.api_service import ServiceError
-from services.workspace import incidents
+from services.workspace.workspace import incidents
 
 workspace_api=Blueprint('workspace_api',__name__,url_prefix='/api/workspace')
 
@@ -27,7 +27,7 @@ def profile(city_id):
 
 @workspace_api.get('/climatology')
 def climatology():
-    from services.workspace import iso_date
+    from services.workspace.workspace import iso_date
     day=iso_date(request.args.get('date'))
     profile=current_app.extensions['earthlens_workspace'].profile(request.args.get('city_id'))
     return success({'kind':'climatology_reference','date_context':day.isoformat(),'month':day.month,
@@ -48,7 +48,7 @@ def climatological_profile(city_id):return success(current_app.extensions['earth
 @workspace_api.get('/trends')
 def trends():
     from datetime import date
-    from services.workspace import iso_date
+    from services.workspace.workspace import iso_date
     args=request.args.to_dict()
     if set(args)-{'city_id','variable','start','end'}:raise ServiceError('invalid_request','Parámetros de tendencias desconocidos.')
     start=iso_date(args.get('start','2000-01-01'));end=iso_date(args.get('end','2024-12-31'))
@@ -70,7 +70,7 @@ def historical_incidents():
 
 @workspace_api.get('/report.pdf')
 def scientific_report():
-    from services.reports import pdf_report
+    from services.workspace.reports import pdf_report
     selection=request.args.to_dict()
     if set(selection)-{'city_id','city_b','variable','provider','start','end'} or 'city_id' not in selection:
         raise ServiceError('invalid_request','Seleccionar ciudad, proveedor, variable y período.')
@@ -107,7 +107,7 @@ def scientific_report():
                 if city_b:
                     other_analysis,_=machine._city_analysis(city_b,row['variable'],first,last)
                     if analysis['unit']==other_analysis['unit'] and [p['year'] for p in analysis['series']]==[p['year'] for p in other_analysis['series']]:
-                        from services.trend_analysis import compare_two_locations
+                        from services.science.trend_analysis import compare_two_locations
                         sections.append(('Comparación de ciudades del motor (provisional)',compare_two_locations(
                             analysis,other_analysis,analysis['location']['name'],other_analysis['location']['name'])))
             except ServiceError as error:sections.append(('Análisis estadístico no disponible',error.message))

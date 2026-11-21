@@ -15,7 +15,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from services.trend_analysis import VARIABLES_CATALOG, aggregate_to_annual_series
+from services.science.trend_analysis import VARIABLES_CATALOG, aggregate_to_annual_series
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SAMPLE_FILE = BASE_DIR / "data" / "samples" / "comodoro_rivadavia_2000_2024.json"

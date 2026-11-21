@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EarthLens · Comparador de Dos Ubicaciones</title>
+  <!-- Bootstrap 5 CSS -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  />
+  <!-- Estilos compartidos y del módulo 03 -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/global/styles.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/results.css') }}" />
+</head>
+<body>
+  <!-- Navegación principal -->
+  {% include "components/_navigation.html" %}
+
+  <main class="container py-4 flex-grow-1">
+    <!-- Banner de modo de datos -->
+    <div id="compareModeBanner" class="data-mode-banner mb-4">
+      <div id="compareModeText">
+        Consultando datos reales de NASA POWER…</div>
+    </div>
+
+    <!-- Encabezado y exportación CSV -->
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+      <div>
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-1">
+          <span id="cmpSharedVariable" class="badge bg-primary">Temperatura media a 2m (T2M) · Unidad: °C</span>
+          <span id="cmpSharedPeriod" class="badge bg-secondary">Período común: 2000 – 2024</span>
+        </div>
+        <h1 class="h3 fw-bold mb-1">Comparador Ambiental de Dos Ubicaciones</h1>
+        <p class="text-muted small mb-0">
+          Contrasta la evolución histórica, pendiente y evidencia estadística de dos regiones bajo la misma variable y período.
+        </p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a href="results.html" class="btn btn-outline-secondary btn-sm">
+          ← Ver análisis individual
+        </a>
+        <button id="btnExportCompareCSV" type="button" class="btn btn-success btn-sm fw-semibold">
+          ⬇ Descargar CSV Comparativo
+        </button>
+      </div>
+    </div>
+
+    <!-- Panel de configuración del Comparador (Misma variable y período para Ubicación A y B) -->
+    <section class="card border-0 shadow-sm mb-4">
+      <div class="card-body">
+        <div class="row g-3">
+          <!-- Ubicación A -->
+          <div class="col-lg-4 border-end-lg">
+            <h2 class="h6 fw-bold mb-2">
+              <span class="location-tag-a"></span>Ubicación A
+            </h2>
+            <div class="mb-2">
+              <select id="selectPresetA" class="form-select form-select-sm">
+                <option value="comodoro" selected>Comodoro Rivadavia, Chubut</option>
+                <option value="bariloche">San Carlos de Bariloche, Río Negro</option>
+                <option value="ushuaia">Ushuaia, Tierra del Fuego</option>
+                <option value="riogallegos">Río Gallegos, Santa Cruz</option>
+                <option value="madryn">Puerto Madryn, Chubut</option>
+                <option value="neuquen">Neuquén Capital, Neuquén</option>
+              </select>
+            </div>
+            <div class="row g-2">
+              <div class="col-6">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">Lat</span>
+                  <input type="number" step="0.01" id="inputLatA" readonly class="form-control" value="-45.86" />
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">Lon</span>
+                  <input type="number" step="0.01" id="inputLonA" readonly class="form-control" value="-67.50" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Ubicación B -->
+          <div class="col-lg-4 border-end-lg">
+            <h2 class="h6 fw-bold mb-2">
+              <span class="location-tag-b"></span>Ubicación B
+            </h2>
+            <div class="mb-2">
+              <select id="selectPresetB" class="form-select form-select-sm">
+                <option value="comodoro">Comodoro Rivadavia, Chubut</option>
+                <option value="bariloche">San Carlos de Bariloche, Río Negro</option>
+                <option value="ushuaia" selected>Ushuaia, Tierra del Fuego</option>
+                <option value="riogallegos">Río Gallegos, Santa Cruz</option>
+                <option value="madryn">Puerto Madryn, Chubut</option>
+                <option value="neuquen">Neuquén Capital, Neuquén</option>
+              </select>
+            </div>
+            <div class="row g-2">
+              <div class="col-6">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">Lat</span>
+                  <input type="number" step="0.01" id="inputLatB" readonly class="form-control" value="-54.80" />
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="input-group input-group-sm">
+                  <span class="input-group-text">Lon</span>
+                  <input type="number" step="0.01" id="inputLonB" readonly class="form-control" value="-68.30" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Variable y período común -->
+          <div class="col-lg-4">
+            <h2 class="h6 fw-bold mb-2">Variable y Período Común</h2>
+            <div class="mb-2">
+              <select id="cmpVariableSelect" class="form-select form-select-sm">
+                <option value="T2M" selected>T2M · Temperatura media (°C)</option>
+                <option value="PRECTOTCORR">PRECTOTCORR · Precipitaciones (mm/día)</option>
+                <option value="RH2M">RH2M · Humedad relativa (%)</option>
+                <option value="WS2M">WS2M · Velocidad del viento (m/s)</option>
+                <option value="T2M_MAX">T2M_MAX · Temperatura máxima (°C)</option>
+                <option value="T2M_MIN">T2M_MIN · Temperatura mínima (°C)</option>
+              </select>
+            </div>
+            <div class="row g-2 align-items-center">
+              <div class="col-4">
+                <input type="number" id="cmpStartYear" class="form-control form-control-sm" value="2000" min="1981" max="2023" />
+              </div>
+              <div class="col-4">
+                <input type="number" id="cmpEndYear" class="form-control form-control-sm" value="2024" min="1985" max="2025" />
+              </div>
+              <div class="col-4 d-grid">
+                <button id="btnRunComparison" type="button" class="btn btn-primary btn-sm fw-semibold">
+                  Comparar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+<div id="compare-output" hidden>
+
+    <!-- Síntesis Comparativa Automática -->
+    <section class="conclusion-box mb-4">
+      <div class="row g-3 align-items-center">
+        <div class="col-lg-7">
+          <div class="text-uppercase small fw-bold text-primary mb-1">Síntesis Comparativa Basada en Evidencia</div>
+          <p id="cmpSynthesisText" class="mb-0 small">
+            Calculando comparación estadística entre ambas ubicaciones...
+          </p>
+        </div>
+        <div class="col-lg-5">
+          <div class="row g-2 text-center">
+            <div class="col-4">
+              <div class="p-2 bg-white rounded border">
+                <div class="text-muted" style="font-size: 0.7rem;">Δ MEDIA (A−B)</div>
+                <div id="cmpDeltaMean" class="fw-bold small">--</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="p-2 bg-white rounded border">
+                <div class="text-muted" style="font-size: 0.7rem;">Δ TENDENCIA/DÉC</div>
+                <div id="cmpDeltaDecade" class="fw-bold small">--</div>
+              </div>
+            </div>
+            <div class="col-4">
+              <div class="p-2 bg-white rounded border">
+                <div class="text-muted" style="font-size: 0.7rem;">Δ CAMBIO TOTAL</div>
+                <div id="cmpDeltaTotal" class="fw-bold small">--</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Gráfico superpuesto (Ubicación A vs Ubicación B + Rectas de Tendencia) -->
+    <section class="chart-panel mb-4">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div>
+          <h2 class="h5 fw-bold mb-0">Series Históricas y Tendencias Comparadas</h2>
+          <p class="text-muted small mb-0">
+            Ambas ubicaciones graficadas en la misma escala, unidad y rango de años.
+          </p>
+        </div>
+        <div class="form-check form-switch">
+          <input class="form-check-input" type="checkbox" id="cmpToggleTrendlines" checked />
+          <label class="form-check-label small text-secondary" for="cmpToggleTrendlines">
+            Superponer rectas de regresión lineal
+          </label>
+        </div>
+      </div>
+      <div class="chart-canvas-wrapper">
+        <canvas id="comparisonChart"></canvas>
+      </div>
+    </section>
+
+    <!-- Tarjetas comparativas lado a lado (Ubicación A vs Ubicación B) -->
+    <section class="row g-4 mb-4">
+      <!-- Tarjeta Ubicación A -->
+      <div class="col-md-6">
+        <div class="metric-card compare-card-a">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <h3 class="h5 fw-bold mb-0">
+                <span class="location-tag-a"></span><span id="cmpNameA">Comodoro Rivadavia, Chubut</span>
+              </h3>
+              <span id="cmpCoordsA" class="text-muted small">Lat: -45.86° · Lon: -67.50°</span>
+            </div>
+            <span id="cmpSigBadgeA" class="badge rounded-pill badge-sig-yes">Significativo</span>
+          </div>
+          <hr class="my-2" />
+          <div class="row g-2 my-1">
+            <div class="col-6">
+              <div class="metric-label">Promedio del período</div>
+              <div id="cmpMeanA" class="fw-bold fs-5">--</div>
+            </div>
+            <div class="col-6">
+              <div class="metric-label">Pendiente anual</div>
+              <div id="cmpSlopeA" class="fw-bold fs-5">--</div>
+            </div>
+            <div class="col-6">
+              <div class="metric-label">Cambio por década</div>
+              <div id="cmpDecadeA" class="fw-bold fs-6 text-primary">--</div>
+            </div>
+            <div class="col-6">
+              <div class="metric-label">Cambio total período</div>
+              <div id="cmpTotalA" class="fw-bold fs-6">--</div>
+            </div>
+            <div class="col-12 mt-2">
+              <span class="text-muted small">p-valor regresión: <strong id="cmpPValA">--</strong></span>
+            </div>
+          </div>
+          <p id="cmpConclusionA" class="small text-secondary mb-0 mt-2 border-top pt-2"></p>
+        </div>
+      </div>
+
+      <!-- Tarjeta Ubicación B -->
+      <div class="col-md-6">
+        <div class="metric-card compare-card-b">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <h3 class="h5 fw-bold mb-0">
+                <span class="location-tag-b"></span><span id="cmpNameB">Ushuaia, Tierra del Fuego</span>
+              </h3>
+              <span id="cmpCoordsB" class="text-muted small">Lat: -54.80° · Lon: -68.30°</span>
+            </div>
+            <span id="cmpSigBadgeB" class="badge rounded-pill badge-sig-yes">Significativo</span>
+          </div>
+          <hr class="my-2" />
+          <div class="row g-2 my-1">
+            <div class="col-6">
+              <div class="metric-label">Promedio del período</div>
+              <div id="cmpMeanB" class="fw-bold fs-5">--</div>
+            </div>
+            <div class="col-6">
+              <div class="metric-label">Pendiente anual</div>
+              <div id="cmpSlopeB" class="fw-bold fs-5">--</div>
+            </div>
+            <div class="col-6">
+              <div class="metric-label">Cambio por década</div>
+              <div id="cmpDecadeB" class="fw-bold fs-6 text-danger">--</div>
+            </div>
+            <div class="col-6">
+              <div class="metric-label">Cambio total período</div>
+              <div id="cmpTotalB" class="fw-bold fs-6">--</div>
+            </div>
+            <div class="col-12 mt-2">
+              <span class="text-muted small">p-valor regresión: <strong id="cmpPValB">--</strong></span>
+            </div>
+          </div>
+          <p id="cmpConclusionB" class="small text-secondary mb-0 mt-2 border-top pt-2"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tabla comparativa anual -->
+    <section class="card border-0 shadow-sm">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+        <span class="fw-semibold small text-uppercase text-secondary">Tabla Comparativa Anual (Ubicación A vs Ubicación B)</span>
+        <button
+          class="btn btn-sm btn-link text-decoration-none"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#collapseCompareTable"
+          aria-expanded="false"
+        >
+          Mostrar / ocultar tabla
+        </button>
+      </div>
+      <div id="collapseCompareTable" class="collapse show">
+        <div class="table-responsive" style="max-height: 260px; overflow-y: auto;">
+          <table class="table table-sm table-hover table-scientific mb-0 align-middle">
+            <thead class="sticky-top">
+              <tr>
+                <th>Año</th>
+                <th><span class="location-tag-a"></span>Valor Ubicación A</th>
+                <th><span class="location-tag-b"></span>Valor Ubicación B</th>
+                <th>Diferencia (A − B)</th>
+              </tr>
+            </thead>
+            <tbody id="cmpTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+  </main>
+
+  <footer class="bg-white border-top py-3 mt-5">
+    <div class="container d-flex flex-wrap justify-content-between align-items-center small text-muted">
+      <span>EarthLens · NASA Space Apps Challenge 2026 · Be An Earth System Trend Detective!</span>
+      <span>Módulo 03: Resultados y Comparador (Chart.js + Contrato JSON)</span>
+    </div>
+  </footer>
+
+  <!-- Bootstrap 5 JS + Chart.js 4 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <!-- Scripts del Rol 03 -->
+  <script src="{{ url_for('static', filename='js/shared/api.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/shared/charts.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/exploration/compare.js') }}"></script>
+</body>
+</html>

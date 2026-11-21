@@ -9,10 +9,10 @@ import time
 import requests
 
 from services.api_service import ServiceError
-from services.bulk import validate_period
-from services.cache import JsonCache, utc_now
+from services.providers.bulk import validate_period
+from services.providers.cache import JsonCache, utc_now
 from services.providers.gldas import environment_token
-from services.scientific import make_record
+from services.science.scientific import make_record
 
 
 BASE_URL = "https://api.giovanni.earthdata.nasa.gov"

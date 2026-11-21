@@ -107,7 +107,7 @@ services:
       service: backend
     profiles: [monitoring]
     ports: !reset []
-    command: [python, -m, scripts.monitor_events, --loop, --interval, "3600"]
+    command: [python, -m, scripts.maintenance.monitor_events, --loop, --interval, "3600"]
     healthcheck:
       disable: true
     restart: unless-stopped

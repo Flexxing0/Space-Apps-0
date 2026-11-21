@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Explorador Ambiental · EarthLens — NASA Space Apps 2026</title>
+
+  <!-- Google Fonts (Inter + JetBrains Mono) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+  <!-- Bootstrap 5.3 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Leaflet 1.9.4 CSS (OpenStreetMap) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+
+  <!-- Estilos compartidos y del Explorador -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/global/styles.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pages/explorer.css') }}">
+</head>
+<body>
+
+  <!-- Barra de Navegación Principal (Estructura común EarthLens) -->
+  {% include "components/_navigation.html" %}
+
+  <!-- Cabecera del Explorador y Flujo de Investigación -->
+  <header class="explorer-header">
+    <div class="container">
+      <div class="row align-items-center g-3">
+        <div class="col-lg-7">
+          <h1 class="h3 fw-bold mb-1">Explorador de Tendencias del Sistema Terrestre</h1>
+          <p class="mb-0 text-white-50 small">
+            Selecciona una ubicación en el mapa de Argentina, elige una variable climática de <strong>NASA POWER / MERRA-2</strong> y define el período histórico para analizar si existe evidencia estadística de una tendencia.
+          </p>
+        </div>
+        <div class="col-lg-5 d-flex justify-content-lg-end">
+          <div class="workflow-steps" aria-label="Flujo de investigación">
+            <span class="workflow-step">
+              <span class="step-num">1</span> Elegir
+            </span>
+            <span class="workflow-step active">
+              <span class="step-num">2</span> Configurar
+            </span>
+            <span class="workflow-step">
+              <span class="step-num">3</span> Analizar
+            </span>
+            <span class="workflow-step">
+              <span class="step-num">4</span> Descubrir
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Contenido Principal del Explorador -->
+  <main class="container my-4">
+
+    <!-- Banner dinámico cuando se accede desde una Misión del Modo Detective -->
+    <div id="active-mission-banner" class="alert alert-info d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 py-2 px-3 d-none" role="status">
+      <div>
+        <span class="badge bg-primary me-2">Modo Detective</span>
+        <strong id="active-mission-text">Caso guiado activo</strong>
+      </div>
+      <span class="small text-muted">Las misiones reutilizan el explorador con parámetros preconfigurados.</span>
+    </div>
+
+    <!-- Accesos rápidos: Casos de prueba y Misiones (Página 4 y 7) -->
+    <div class="el-card p-3 mb-3">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <span class="small fw-semibold text-secondary me-1">Ubicaciones y Misiones rápidas:</span>
+          <button type="button" class="preset-chip active" data-preset-id="comodoro" title="Consulta de prueba oficial NASA POWER (2000–2024)">
+            📍 Comodoro Rivadavia (Misión 01 · T2M)
+          </button>
+          <button type="button" class="preset-chip" data-preset-id="agua-cuyo" title="Caso 02: En busca del agua">
+            💧 Mendoza / Cuyo (Misión 02 · Precipitaciones)
+          </button>
+          <button type="button" class="preset-chip" data-preset-id="viento-austral" title="Caso 03: El misterio del viento">
+            💨 Río Gallegos (Misión 03 · Viento)
+          </button>
+        </div>
+        <div class="d-flex gap-2">
+          
+          <button type="button" id="btn-reset-world" class="btn btn-sm btn-outline-secondary">
+            🇦🇷 Vista de Argentina
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grilla Principal: Mapa Interactivo (Izquierda) + Configuración de Consulta (Derecha) -->
+    <div class="row g-4">
+
+      <!-- Columna del Mapa Leaflet -->
+      <div class="col-lg-7">
+        <div class="map-wrapper">
+          <div id="explorer-map" role="application" aria-label="Mapa de ciudades argentinas"></div>
+
+          <!-- Barra inferior superpuesta en el mapa -->
+          <div class="map-overlay-bottom">
+            <span>Coordenadas activas: <strong id="map-live-coords" class="coord-pill">-45.8600°, -67.5000°</strong></span>
+            <span class="text-white-50 d-none d-sm-inline">| Celda MERRA-2 (0.5° × 0.625°)</span>
+          </div>
+        </div>
+
+        <div class="d-flex flex-wrap justify-content-between align-items-center mt-2 px-1 small text-muted">
+          <span>💡 Selecciona una ciudad del catálogo o pulsa su marcador. Las coordenadas libres requieren validación territorial oficial.</span>
+          <span>Nota: NASA POWER representa celdas geográficas, no estaciones puntuales.</span>
+        </div>
+      </div>
+
+      <!-- Columna del Formulario de Parámetros -->
+      <div class="col-lg-5">
+        <div class="config-panel p-3 p-md-4 h-100 d-flex flex-column justify-content-between">
+          <form id="explorer-form" novalidate>
+
+            <!-- 1. Ubicación y Coordenadas -->
+            <div class="mb-3">
+              <div class="config-section-title">
+                <span>1. Ubicación Geográfica</span>
+                <span id="location-label-display" class="badge bg-light text-dark border fw-normal">Comodoro Rivadavia (Prueba MVP)</span>
+              </div>
+
+              <label for="select-city" class="form-label small">Ciudad argentina verificada</label><select id="select-city" class="form-select form-select-sm mb-2" required></select>
+              <div class="row g-2">
+                <div class="col-6">
+                  <label for="input-latitude" class="form-label small fw-medium mb-1">Latitud (-90° a 90°)</label>
+                  <div class="input-group input-group-sm">
+                    <input
+                      type="number"
+                      class="form-control"
+                      id="input-latitude" readonly
+                      name="latitude"
+                      step="0.0001"
+                      min="-90"
+                      max="90"
+                      value="-45.8600"
+                      required
+                    >
+                    <span class="input-group-text">°</span>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label for="input-longitude" class="form-label small fw-medium mb-1">Longitud (-180° a 180°)</label>
+                  <div class="input-group input-group-sm">
+                    <input
+                      type="number"
+                      class="form-control"
+                      id="input-longitude" readonly
+                      name="longitude"
+                      step="0.0001"
+                      min="-180"
+                      max="180"
+                      value="-67.5000"
+                      required
+                    >
+                    <span class="input-group-text">°</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <hr class="my-3 text-muted opacity-25">
+
+            <!-- 2. Selector de Variable Climática -->
+            <div class="mb-3">
+              <div class="config-section-title">
+                <span>2. Variable Climática (NASA POWER)</span>
+                <span id="var-priority-badge" class="badge bg-primary-subtle text-primary-emphasis">Prioridad: Primera</span>
+              </div>
+
+              <label for="select-variable" class="form-label small fw-medium mb-1">Variable a investigar</label>
+              <select class="form-select form-select-sm mb-2" id="select-variable" name="variable" required>
+                <!-- Poblado dinámicamente por explorer.js -->
+              </select>
+
+              <div class="variable-info-box">
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                  <span id="var-code-badge" class="variable-code-tag">T2M</span>
+                  <span id="var-unit-badge" class="text-muted small fw-semibold">Unidad: deg C</span>
+                </div>
+                <p id="var-description" class="mb-0 text-secondary small">
+                  Promedio anual de la temperatura del aire a 2 metros sobre la superficie. Variable principal del MVP.
+                </p>
+              </div>
+            </div>
+
+            <hr class="my-3 text-muted opacity-25">
+
+            <!-- 3. Selector de Período Temporal -->
+            <div class="mb-3">
+              <div class="config-section-title">
+                <span>3. Período de Análisis (Años)</span>
+                <span id="year-span-badge" class="badge bg-info-subtle text-info-emphasis">25 años (2000–2024)</span>
+              </div>
+
+              <div class="row g-2 mb-2">
+                <div class="col-6">
+                  <label for="input-start-year" class="form-label small fw-medium mb-1">Año inicial</label>
+                  <input
+                    type="number"
+                    class="form-control form-control-sm"
+                    id="input-start-year"
+                    name="start_year"
+                    min="1981"
+                    max="2024"
+                    step="1"
+                    value="2000"
+                    required
+                  >
+                </div>
+                <div class="col-6">
+                  <label for="input-end-year" class="form-label small fw-medium mb-1">Año final</label>
+                  <input
+                    type="number"
+                    class="form-control form-control-sm"
+                    id="input-end-year"
+                    name="end_year"
+                    min="1981"
+                    max="2024"
+                    step="1"
+                    value="2024"
+                    required
+                  >
+                </div>
+              </div>
+
+              <!-- Atajos de período -->
+              <div class="d-flex flex-wrap gap-1 mb-1">
+                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.75rem;" data-year-range="2000-2024">
+                  2000–2024 (25 años)
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.75rem;" data-year-range="1995-2024">
+                  1995–2024 (30 años)
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.75rem;" data-year-range="1981-2024">
+                  1981–2024 (Serie completa)
+                </button>
+              </div>
+
+              <div id="year-span-warning" class="small text-warning-emphasis bg-warning-subtle border border-warning-subtle rounded p-2 mt-2 d-none">
+                ⚠️ Un período menor a 10 años puede presentar alta variabilidad interanual y menor potencia estadística.
+              </div>
+            </div>
+
+            <!-- Mensajes de validación, carga o error -->
+            <div id="explorer-status-box" class="alert d-none py-2 px-3 mb-3" role="alert"></div>
+
+            <!-- Botón Principal Analizar -->
+            <div class="d-grid gap-2">
+              <button type="submit" id="btn-analyze" class="btn btn-analyze d-flex align-items-center justify-content-center gap-2">
+                <span id="btn-analyze-spinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                <span id="btn-analyze-text">Analizar tendencia</span>
+              </button>
+
+              <a id="btn-send-to-compare" href="/compare" class="btn btn-outline-primary btn-sm">
+                ⚖️ Comparar esta ubicación con otra
+              </a>
+            </div>
+
+            <!-- Opciones de integración Frontend / Backend -->
+            <div class="mt-3 pt-2 border-top small text-muted">
+              <p>Los errores se informan sin sustituir datos. Otros períodos pueden requerir una consulta a NASA.</p>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="toggle-auto-redirect">
+                <label class="form-check-label" for="toggle-auto-redirect">
+                  Redirigir automáticamente a <code>Resultados</code> al finalizar consulta
+                </label>
+              </div>
+            </div>
+
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sección de Resumen Preliminar y Paso a Resultados (Aparece al completar el análisis) -->
+    <section id="analysis-preview-section" class="d-none" aria-live="polite"></section>
+
+  </main>
+
+  <!-- Pie de página común EarthLens -->
+  <footer class="el-footer py-3 mt-5">
+    <div class="container d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div>
+        <strong>EarthLens</strong> · NASA Space Apps Challenge 2026 — <em>Be An Earth System Trend Detective!</em>
+      </div>
+      <div>
+        Fuente principal: <a href="https://power.larc.nasa.gov/" target="_blank" rel="noopener noreferrer">NASA POWER / MERRA-2</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Bootstrap 5.3 JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Leaflet 1.9.4 JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <!-- Módulos del Explorador (Rol 02) -->
+  <script src="{{ url_for('static', filename='js/shared/api.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/shared/map.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/exploration/explorer.js') }}"></script>
+</body>
+</html>

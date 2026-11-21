@@ -1,0 +1,20 @@
+<nav class="navbar navbar-expand-xxl navbar-dark el-navbar sticky-top" aria-label="Navegación principal">
+  <div class="container">
+    <a class="navbar-brand el-brand" href="/"><span>🌍 EarthLens</span><span class="el-brand-badge">NASA Space Apps 2026</span></a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#earthlensNavbar" aria-controls="earthlensNavbar" aria-expanded="false" aria-label="Alternar navegación"><span class="navbar-toggler-icon"></span></button>
+    <div class="collapse navbar-collapse" id="earthlensNavbar">
+      <ul class="navbar-nav ms-auto mb-2 mb-xxl-0 gap-1">
+        {% for endpoint, href, label in [('web.index','/','Inicio'),('web.time_machine','/time-machine','Time Machine'),('web.city_profiles','/cities','Ciudades'),('web.laboratory','/laboratory','Laboratorio'),('web.my_space','/my-space','Mi espacio'),('web.scientific_sources','/sources','Fuentes científicas')] %}
+        <li class="nav-item"><a class="nav-link{{ ' active' if request.endpoint == endpoint else '' }}{{ ' js-go-explorer-link' if request.endpoint == 'web.index' and endpoint == 'web.explorer' else '' }}" href="{{ href }}"{% if request.endpoint == endpoint %} aria-current="page"{% endif %}>{{ label }}</a></li>
+        {% endfor %}
+        <li class="nav-item dropdown"><button class="nav-link dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">Investigación</button><ul class="dropdown-menu dropdown-menu-dark">
+        {% for endpoint, href, label in [('web.explorer','/explorer','Explorador'),('web.radar','/radar','Earth Radar'),('web.fingerprint','/fingerprint','Earth Fingerprint'),('web.results','/results','Resultados'),('web.compare','/compare','Comparador'),('web.missions','/missions','Earth Detective'),('web.about','/about','Metodología')] %}
+        <li><a class="nav-link{{ ' active' if request.endpoint == endpoint else '' }}{{ ' js-go-explorer-link' if request.endpoint == 'web.index' and endpoint == 'web.explorer' else '' }}" href="{{ href }}"{% if request.endpoint == endpoint %} aria-current="page"{% endif %}>{{ label }}</a></li>
+        {% endfor %}</ul></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+{% if request.endpoint in ['web.explorer','web.compare','web.radar','web.fingerprint','web.missions'] %}
+{% include "components/_scientific_panel.html" %}
+{% endif %}

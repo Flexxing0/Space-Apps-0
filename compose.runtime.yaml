@@ -27,7 +27,7 @@ services:
     image: earthlens-backend:local-stable
     init: true
     environment: *environment
-    command: [python, -m, scripts.monitor_events, --loop, --interval, "3600"]
+    command: [python, -m, scripts.maintenance.monitor_events, --loop, --interval, "3600"]
     volumes:
       - scientific-cache:/app/data/cache
       - runtime-data:/app/data/runtime

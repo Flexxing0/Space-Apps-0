@@ -2,7 +2,7 @@
 
 **Actualización verificada:** el trigger automático de main publica en
 <https://earthlens-pp-224139449590.us-central1.run.app/>. La restauración `ba8ea3a`
-ya se construyó y desplegó correctamente; ver [resultado](../../docs/restore-main.md).
+ya se construyó y desplegó correctamente; ver [resultado](../../docs/history/restore-main.md).
 El paquete manual descrito abajo apunta al servicio anterior `earthlens`, de la
 URL sin `-pp`; no hace falta ejecutarlo para usar el despliegue nuevo.
 
@@ -13,7 +13,7 @@ en `PORT`; excluye credenciales, pruebas, cachés científicas y bases privadas.
 Preparación desde esta computadora, con el backend local en ejecución:
 
 ```powershell
-.\venv\Scripts\python.exe scripts/prepare_cloud_release.py
+.\venv\Scripts\python.exe scripts/maintenance/prepare_cloud_release.py
 ```
 
 El resultado es `dist/earthlens-cloud-release.zip`. No se añade a Git.

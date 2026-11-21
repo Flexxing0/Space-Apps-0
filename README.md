@@ -1,5 +1,9 @@
 # 🌍 EarthLens
 
+> **Versión vigente:** [abrir EarthLens](https://earthlens-pp-224139449590.us-central1.run.app/).
+> El despliegue automático de `main` utiliza el servicio `earthlens-pp`.
+> [Restauración y verificaciones](docs/history/restore-main.md).
+
 > **Understand the past. Anticipate the future.**
 
 Environmental and geospatial intelligence platform developed by **Patagonia Prime** for the **NASA Space Apps Challenge 2026 — Be An Earth System Trend Detective!**
@@ -132,6 +136,19 @@ docker compose exec -T backend python -m unittest discover -s tests
 docker compose --profile monitoring up -d monitor
 docker compose logs --tail 30 monitor
 ```
+
+Earth Time Machine: **http://127.0.0.1:5000/time-machine**, incorporado de `main`
+y conectado a las cachés POWER por ciudad. Conserva la interfaz del equipo y sus
+análisis exploratorios; no utiliza muestras de respaldo, coordenadas libres ni
+ajustes artificiales de cuadrantes. El Inicio y las herramientas anteriores se
+conservan. Decisiones del merge: [integración de main](docs/history/merge-main.md).
+
+- [Ejecución y pruebas en Docker](docs/operations/docker.md)
+- [Estructura del proyecto e inventario de movimientos](docs/architecture/project-structure.md)
+- [Contrato de la API](docs/architecture/api.md)
+- [Radar y Fingerprint provisionales](docs/architecture/products.md)
+- [Diagnóstico e integración entre ramas](docs/architecture/integration.md)
+- [Estado y dependencias del backend](docs/project/BACKEND_TASKS.md)
 
 Do not remove persistent volumes or scientific caches when updating the application. Avoid `docker compose down -v`.
 
