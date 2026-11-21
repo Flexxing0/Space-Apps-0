@@ -6,9 +6,9 @@ import time
 
 import requests
 
-from services.analysis_results import content_hash
-from services.cache import utc_now, write_json_atomic
-from services.scientific import make_record
+from services.science.analysis_results import content_hash
+from services.providers.cache import utc_now, write_json_atomic
+from services.science.scientific import make_record
 
 
 BASE_URL = "https://modis.ornl.gov/rst/api/v1"

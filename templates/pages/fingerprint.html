@@ -1,0 +1,32 @@
+{% extends "layouts/base.html" %}
+{% block title %}Earth Fingerprint · EarthLens{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ url_for('static', filename='css/pages/products.css') }}">{% endblock %}
+{% block content %}
+<main class="container product-page py-4" id="fingerprint-page">
+  <header class="product-heading"><div><p class="product-eyebrow">Argentina · Perfiles ambientales</p><h1>Earth Fingerprint</h1><p class="product-intro">Conocé la historia ambiental de una ciudad y compará sus indicadores conservando las unidades y la evidencia de cada variable.</p></div><a class="btn btn-outline-primary" href="/radar">Explorar Earth Radar →</a></header>
+  {% include "components/_provisional_notice.html" %}
+  <form class="el-card p-3 mb-3" id="fingerprint-form" aria-label="Selección de perfiles">
+    <div class="fingerprint-controls">
+      <div><label for="fingerprint-city" class="form-label">Ciudad del perfil</label><select class="form-select" id="fingerprint-city" required><option value="">Cargando ciudades…</option></select></div>
+      <div><label for="fingerprint-compare-city" class="form-label">Comparar con otra ciudad</label><select class="form-select" id="fingerprint-compare-city"><option value="">Sin comparación</option></select></div>
+      <div class="period-context"><span class="product-help">Período del perfil</span><strong id="fingerprint-period">—</strong><small class="product-help">Serie histórica disponible en caché</small></div>
+    </div>
+  </form>
+  <div id="fingerprint-status" class="product-status mb-3" role="status" aria-live="polite">Cargando el catálogo argentino…</div>
+  <button class="btn btn-outline-primary mb-3" type="button" id="fingerprint-retry" hidden>Reintentar consulta</button>
+  <section id="fingerprint-output" hidden aria-busy="true">
+    <div class="fingerprint-context el-card p-3 mb-3"><div><h2 id="fingerprint-title" class="h4 mb-1"></h2><p id="fingerprint-location" class="product-help mb-0"></p></div><div id="fingerprint-summary" class="profile-summary"></div></div>
+    <div id="fingerprint-comparison-status" class="comparison-status mb-3" role="note" hidden></div>
+    <p class="product-help">Cada gráfico conserva la unidad de su indicador. Las medias de extremos mensuales se distinguen de las cuatro variables principales.</p>
+    <div id="fingerprint-cards" class="fingerprint-grid"></div>
+    <section class="el-card p-3 mt-4" aria-labelledby="fingerprint-method-title"><h2 class="h5" id="fingerprint-method-title">Fuentes, cobertura y metodología</h2><div id="fingerprint-methodology"></div></section>
+  </section>
+  <noscript><p class="alert alert-warning">Activá JavaScript para consultar los perfiles y gráficos históricos.</p></noscript>
+</main>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/shared/api.js') }}"></script>
+<script src="{{ url_for('static', filename='js/products/products.js') }}"></script>
+<script src="{{ url_for('static', filename='js/products/fingerprint.js') }}"></script>
+{% endblock %}

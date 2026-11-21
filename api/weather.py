@@ -1,7 +1,7 @@
 from flask import Blueprint, current_app, request
 from api.responses import success
 from services.api_service import ServiceError
-from services.weather import official_alerts
+from services.weather.weather import official_alerts
 
 weather_api=Blueprint('weather_api',__name__,url_prefix='/api')
 
@@ -17,11 +17,11 @@ def alerts():return success(official_alerts())
 
 @weather_api.get('/impact')
 def impact():
-    from services.impact import impact_status
+    from services.science.impact import impact_status
     city=current_app.extensions['earthlens_service'].get_city(request.args.get('city_id'))
     return success(impact_status(city))
 
 @weather_api.get('/prediction/capabilities')
 def predictions():
-    from services.prediction import capabilities
+    from services.prediction.prediction import capabilities
     return success(capabilities())

@@ -1,6 +1,6 @@
 > **Versi?n vigente:** [abrir EarthLens](https://earthlens-pp-224139449590.us-central1.run.app/).
 > El despliegue autom?tico de `main` utiliza el servicio `earthlens-pp`.
-> [Restauraci?n y verificaciones](docs/restore-main.md).
+> [Restauraci?n y verificaciones](docs/history/restore-main.md).
 
 # EarthLens — Patagonia Prime
 
@@ -24,13 +24,14 @@ Earth Time Machine: **http://127.0.0.1:5000/time-machine**, incorporado de `main
 y conectado a las cachés POWER por ciudad. Conserva la interfaz del equipo y sus
 análisis exploratorios; no utiliza muestras de respaldo, coordenadas libres ni
 ajustes artificiales de cuadrantes. El Inicio y las herramientas anteriores se
-conservan. Decisiones del merge: [integración de main](docs/merge-main.md).
+conservan. Decisiones del merge: [integración de main](docs/history/merge-main.md).
 
-- [Ejecución y pruebas en Docker](docs/docker.md)
-- [Contrato de la API](docs/api.md)
-- [Radar y Fingerprint provisionales](docs/products.md)
-- [Diagnóstico e integración entre ramas](docs/integration.md)
-- [Estado y dependencias del backend](BACKEND_TASKS.md)
+- [Ejecución y pruebas en Docker](docs/operations/docker.md)
+- [Estructura del proyecto e inventario de movimientos](docs/architecture/project-structure.md)
+- [Contrato de la API](docs/architecture/api.md)
+- [Radar y Fingerprint provisionales](docs/architecture/products.md)
+- [Diagnóstico e integración entre ramas](docs/architecture/integration.md)
+- [Estado y dependencias del backend](docs/project/BACKEND_TASKS.md)
 
 La caché existente de `data/cache` se conserva mediante un bind mount. No hace
 falta Node ni un segundo Compose. Los recursos visuales externos requieren Internet.

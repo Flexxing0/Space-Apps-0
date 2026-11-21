@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from api.responses import success
 from api.routes import query_parameters
 from services.api_service import ServiceError
-from services.bulk import validate_period
+from services.providers.bulk import validate_period
 
 
 scientific_api = Blueprint("scientific_api", __name__, url_prefix="/api/science")
@@ -58,7 +58,7 @@ def data():
 
 @scientific_api.post('/compare')
 def compare():
-    from services.scientific_compare import compare as compare_series
+    from services.science.scientific_compare import compare as compare_series
     query_parameters()
     if not request.is_json:raise UnsupportedMediaType()
     try:

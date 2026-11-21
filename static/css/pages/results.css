@@ -1,0 +1,176 @@
+/* ==========================================================================
+   EarthLens — Rol 03: Resultados y Comparador (results.css)
+   NASA Space Apps Challenge 2026 · Be An Earth System Trend Detective!
+   Complementa static/css/global/styles.css (Rol 01)
+   ========================================================================== */
+
+:root {
+  --el-card: #ffffff;
+  --el-text: #1e293b;
+  --el-muted: #64748b;
+  --el-nasa-blue: #0b3d91;
+  --el-nasa-red: #fc3d21;
+  --el-teal: #0ea5e9;
+  --el-emerald: #10b981;
+  --el-amber: #f59e0b;
+  --el-border: #e2e8f0;
+}
+
+/* Banner de estado de datos (Datos de prueba vs API NASA real) */
+.data-mode-banner {
+  border-left: 4px solid var(--el-amber);
+  background-color: #fffbeb;
+  color: #92400e;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+}
+
+.data-mode-banner.is-live {
+  border-left-color: var(--el-emerald);
+  background-color: #ecfdf5;
+  color: #065f46;
+}
+
+/* Tarjetas de métricas estadísticas */
+.metric-card {
+  background: var(--el-card);
+  border: 1px solid var(--el-border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  height: 100%;
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+}
+
+.metric-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--el-muted);
+  margin-bottom: 0.35rem;
+}
+
+.metric-value {
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: var(--el-text);
+  line-height: 1.2;
+}
+
+.metric-sub {
+  font-size: 0.82rem;
+  color: var(--el-muted);
+  margin-top: 0.35rem;
+}
+
+/* Contenedor de gráficos Chart.js */
+.chart-panel {
+  background: var(--el-card);
+  border: 1px solid var(--el-border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+}
+
+.chart-canvas-wrapper {
+  position: relative;
+  width: 100%;
+  min-height: 380px;
+}
+
+/* Bloque de conclusión científica */
+.conclusion-box {
+  background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%);
+  border: 1px solid #bfdbfe;
+  border-left: 5px solid var(--el-nasa-blue);
+  border-radius: 0.75rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.conclusion-box.significant-increasing {
+  border-left-color: var(--el-nasa-red);
+  background: linear-gradient(135deg, #fff5f5 0%, #fef2f2 100%);
+  border-color: #fecaca;
+}
+
+.conclusion-box.significant-decreasing {
+  border-left-color: var(--el-teal);
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-color: #bae6fd;
+}
+
+/* Badges de significancia y dirección */
+.badge-sig-yes {
+  background-color: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+  font-weight: 600;
+}
+
+.badge-sig-no {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  font-weight: 600;
+}
+
+/* Tarjetas del comparador (Ubicación A vs Ubicación B) */
+.location-tag-a {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #0b3d91;
+  margin-right: 6px;
+}
+
+.location-tag-b {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #fc3d21;
+  margin-right: 6px;
+}
+
+.compare-card-a {
+  border-top: 4px solid #0b3d91;
+}
+
+.compare-card-b {
+  border-top: 4px solid #fc3d21;
+}
+
+/* Tabla de datos y resumen */
+.table-scientific th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--el-muted);
+  background-color: #f8fafc;
+}
+
+.methodology-note {
+  font-size: 0.83rem;
+  color: var(--el-muted);
+  background-color: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+}
+
+@media (max-width: 768px) {
+  .chart-canvas-wrapper {
+    min-height: 280px;
+  }
+  .metric-value {
+    font-size: 1.35rem;
+  }
+}

@@ -10,11 +10,11 @@ from urllib.parse import urlparse
 
 import requests
 
-from services.analysis_results import content_hash
+from services.science.analysis_results import content_hash
 from services.api_service import ServiceError
-from services.bulk import validate_period
-from services.cache import JsonCache, utc_now, write_json_atomic
-from services.scientific import make_record
+from services.providers.bulk import validate_period
+from services.providers.cache import JsonCache, utc_now, write_json_atomic
+from services.science.scientific import make_record
 
 
 POLICY = "nearest-native-grid-monthly-fill-v1"

@@ -14,7 +14,7 @@
     "methodology": {
       "version": "earthlens.power.annual-ols.provisional.v1",
       "validation_status": "pending",
-      "engine": "services.trend_analysis",
+      "engine": "services.science.trend_analysis",
       "engine_sha256": "32315a052af249b804dd3f2c95685bd890e2d8747a2d32702026798a70638fa5",
       "scipy_version": "1.18.1",
       "regression": "OLS",
@@ -3443,7 +3443,7 @@
         "methodology": {
           "version": "earthlens.power.annual-ols.provisional.v1",
           "validation_status": "pending",
-          "engine": "services.trend_analysis",
+          "engine": "services.science.trend_analysis",
           "engine_sha256": "32315a052af249b804dd3f2c95685bd890e2d8747a2d32702026798a70638fa5",
           "scipy_version": "1.18.1",
           "regression": "OLS",
@@ -3975,7 +3975,7 @@
         "methodology": {
           "version": "earthlens.power.annual-ols.provisional.v1",
           "validation_status": "pending",
-          "engine": "services.trend_analysis",
+          "engine": "services.science.trend_analysis",
           "engine_sha256": "32315a052af249b804dd3f2c95685bd890e2d8747a2d32702026798a70638fa5",
           "scipy_version": "1.18.1",
           "regression": "OLS",
@@ -4507,7 +4507,7 @@
         "methodology": {
           "version": "earthlens.power.annual-ols.provisional.v1",
           "validation_status": "pending",
-          "engine": "services.trend_analysis",
+          "engine": "services.science.trend_analysis",
           "engine_sha256": "32315a052af249b804dd3f2c95685bd890e2d8747a2d32702026798a70638fa5",
           "scipy_version": "1.18.1",
           "regression": "OLS",

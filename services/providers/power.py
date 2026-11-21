@@ -2,7 +2,7 @@
 
 import requests
 
-from services.normalizer import normalize_data
+from services.providers.normalizer import normalize_data
 
 
 BASE_URL = "https://power.larc.nasa.gov/api/temporal/monthly/point"

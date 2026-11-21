@@ -9,7 +9,7 @@ from xml.etree import ElementTree
 import requests
 
 from services.api_service import ServiceError
-from services.cache import utc_now, write_json_atomic
+from services.providers.cache import utc_now, write_json_atomic
 
 
 PRODUCT = "GLDAS_NOAH025_M"

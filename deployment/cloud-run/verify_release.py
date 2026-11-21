@@ -38,7 +38,7 @@ def verify_url(url, manifest):
     page = get("/").decode("utf-8")
     if 'id="scrubber"' not in page or 'id="map"' not in page:
         raise ValueError("The unified map and timeline are missing")
-    script = get("/static/js/workspace.js").decode("utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
+    script = get("/static/js/time-machine/workspace.js").decode("utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
     if hashlib.sha256(script.encode()).hexdigest() != manifest["workspace_js_sha256"]:
         raise ValueError("The deployed interface differs from the packaged local version")
     return {"url": url, "health": 200, "map": True, "timeline": True, "javascript_matches_release": True}

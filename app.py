@@ -6,27 +6,27 @@ from pathlib import Path
 from api.errors import register_error_handlers
 from api.routes import api
 from services.api_service import EarthLensService
-from services.bulk import PowerBulkService
-from services.cache import DEFAULT_CACHE_DIR, JsonCache
-from services.cities import CATALOG_PATH
-from services.analysis_service import AnalysisService
+from services.providers.bulk import PowerBulkService
+from services.providers.cache import DEFAULT_CACHE_DIR, JsonCache
+from services.geography.cities import CATALOG_PATH
+from services.science.analysis_service import AnalysisService
 from web.routes import web
-from services.fingerprint import FingerprintService
-from services.radar import DEFAULT_ARTIFACT_NAME, RadarService
-from services.scientific import ScientificService
-from services.hydrology import HydrologyService
+from services.science.fingerprint import FingerprintService
+from services.science.radar import DEFAULT_ARTIFACT_NAME, RadarService
+from services.science.scientific import ScientificService
+from services.science.hydrology import HydrologyService
 from api.scientific import scientific_api
-from services.time_machine_service import TimeMachineService
-from services.forecast_service import ForecastService
-from services.workspace import WorkspaceService
+from services.workspace.time_machine_service import TimeMachineService
+from services.prediction.forecast_service import ForecastService
+from services.workspace.workspace import WorkspaceService
 from api.workspace import workspace_api
-from services.weather import WeatherService
+from services.weather.weather import WeatherService
 from api.weather import weather_api
-from services.persistence import Store
-from services.events import EventService
+from services.storage.persistence import Store
+from services.events.events import EventService
 from api.events import events_api
-from services.planning import PlanningService
-from services.time_navigation import TimeNavigationService
+from services.events.planning import PlanningService
+from services.workspace.time_navigation import TimeNavigationService
 import secrets
 
 
