@@ -790,7 +790,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (weatherForecastCache.has(cityId)) return weatherForecastCache.get(cityId);
     const city = cities.find(c => c.id === cityId) || { id: cityId, name: 'Comodoro Rivadavia', latitude: -45.88, longitude: -67.52 };
     const todayIso = new Date().toISOString().slice(0, 10);
-    const endIso = offsetIsoDate(13);
+    const endIso = offsetIsoDate(15);
     try {
       const [tempRes, rainProbRes, windRes, cloudRes] = await Promise.all([
         api(`/api/weather?city_id=${cityId}&kind=forecast&variable=temperature_2m&start=${todayIso}&end=${endIso}`),
@@ -863,7 +863,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const baseRains = [5, 5, 10, 20, 60, 25, 5, 5, 10, 15, 5, 10, 20, 5];
     const baseWinds = [32, 28, 30, 35, 38, 26, 24, 29, 31, 27, 25, 30, 33, 24];
     const latOffset = Math.round((city.latitude + 45.88) * 0.45);
-    const fallbackDays = Array.from({ length: 14 }, (_, idx) => {
+    const fallbackDays = Array.from({ length: 16 }, (_, idx) => {
       const dateStr = offsetIsoDate(idx);
       const t = baseTemps[idx % baseTemps.length] + latOffset;
       const rainProb = baseRains[idx % baseRains.length];
@@ -937,6 +937,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const days = await getCityForecastDays(city.id);
     const activeDay = dayObj || days.find(d => d.date === state.date.slice(0, 10)) || days[0];
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const displayDate = activeDay?.date || state.date.slice(0, 10);
+    const isToday = displayDate === todayIso;
+    const formattedDate = isToday
+      ? ''
+      : new Date(Time.parse(displayDate)).toLocaleDateString('es-AR', {
+          weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'
+        }).replace(/\./g, '');
+    $('dest-region').textContent = isToday
+      ? `${city.province} · ${city.region}`
+      : `${city.province} · ${city.region} · ${formattedDate}`;
+    if ($('dest-todo-title')) {
+      $('dest-todo-title').textContent = isToday
+        ? 'PARA HACER HOY'
+        : `PARA HACER EL ${formattedDate.toUpperCase()}`;
+    }
     const focusVal = frame?.focus?.value;
     const tempVal = (state.variable === 'T2M' || state.variable === 'temperature_2m') && focusVal != null
       ? Math.round(focusVal)
@@ -2074,6 +2090,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function updateTime(value, options = {}) {
     if (value) state.date = Time.iso(Time.parse(value));
+    const cachedDays = weatherForecastCache.get(state.city_id);
+    if (cachedDays) {
+      const idx = cachedDays.findIndex(d => d.date === state.date.slice(0, 10));
+      if (idx >= 0) state.selectedPredictionDayIdx = idx;
+    }
     const position = Time.position(state.date, view);
     if (options.center || position < 0 || position > 1) view = Time.view(state.date, state.scale);
     calendarDate = new Date(Time.parse(state.date));
