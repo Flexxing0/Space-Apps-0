@@ -1660,40 +1660,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Editor avanzado heredado (para pruebas científicas y usuarios avanzados)
-  function eventPayload() {
-    const f = $('event-form').elements, prefs = {};
-    for (const k of ['min_temperature', 'max_temperature', 'max_probability', 'max_precipitation', 'max_wind', 'max_gust']) {
-      if (f[k].value !== '') prefs[k] = Number(f[k].value);
-    }
-    prefs.require_official_alerts = f.require_official_alerts.checked;
-    return {
-      name: f.name.value, description: f.description.value, activity: f.activity.value,
-      city_id: state.city_id, location_label: f.location_label.value,
-      start: f.start.value + ':00-03:00', end: f.end.value + ':00-03:00',
-      participants: +f.participants.value, transport: f.transport.value,
-      outdoor: f.outdoor.checked, flexible_days: +f.flexible_days.value,
-      flexible_hours: +f.flexible_hours.value, preferences: prefs, notifications: f.notifications.checked
-    };
-  }
-
-  $('event-form').onsubmit = safe(async e => {
-    e.preventDefault();
-    if (!user) { notice('Iniciá sesión para guardar un evento.', true); return; }
-    const id = $('event-form').elements.id.value;
-    await api('/api/events' + (id ? '/' + id : ''), { method: id ? 'PATCH' : 'POST', body: JSON.stringify(eventPayload()) });
-    await loadAccount();
-    notice('Evento guardado en tu cuenta.');
-  });
-
-  $('preview-event').onclick = safe(async () => {
-    if (!user) { notice('Iniciá sesión para evaluar el evento.', true); return; }
-    $('assessment').textContent = 'Consultando pronóstico del evento y alternativas…';
-    const result = await api('/api/events/preview', { method: 'POST', body: JSON.stringify(eventPayload()) });
-    $('assessment').innerHTML = `<article class="card"><strong>${escape(result.assessment.label)}</strong></article><h2>Fechas alternativas</h2>` +
-      result.alternatives.map(a => `<article class="card"><p>${escape(a.start)} · ${escape(a.assessment.label)}</p></article>`).join('');
-  });
-
   // ==================== MAPA Y CIUDADES ====================
   function selectedCities() {
     const city = cities.find(c => c.id === state.city_id);
@@ -1737,16 +1703,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         $('destination-card').hidden = false;
         $('mob-open-dest').hidden = true;
         if (isMobile()) setDestinationCompact(false);
-        if ($('territory').value === 'multi') {
-          state.selected = state.selected.includes(city.id) ? state.selected.filter(id => id !== city.id) : [...state.selected, city.id];
-          state.mode = 'compare';
-          $('mode').value = 'compare';
-          renderMap();
-          safe(load)();
-          panel('data');
-        } else {
-          selectCity(city.id);
-        }
+        selectCity(city.id);
       });
       marker.addTo(markers);
       pointLayers.set(city.id, marker);
@@ -1849,19 +1806,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function activeValue() {
     const value = frame?.focus?.value, unit = frame?.focus?.unit || '';
-    $('value').textContent = number(value);
-    $('value-unit').textContent = unit;
+    if ($('value')) $('value').textContent = number(value);
+    if ($('value-unit')) $('value-unit').textContent = unit;
     if ($('map-value')) $('map-value').textContent = number(value) + (value != null ? ' ' + unit : ' · sin dato');
     const kind = frame?.kind || 'unavailable';
-    $('time-kind').className = 'kind-label ' + kind;
-    $('time-kind').textContent = kind === 'forecast' && Math.abs(Time.parse(state.date) - Date.now()) < 36e5 ? 'AHORA · PRONÓSTICO' : labels[kind] || kind;
-    $('data-kind').textContent = labels[kind] || kind;
-    $('data-title').textContent = variableNames[state.variable] || state.variable;
+    if ($('time-kind')) {
+      $('time-kind').className = 'kind-label ' + kind;
+      $('time-kind').textContent = kind === 'forecast' && Math.abs(Time.parse(state.date) - Date.now()) < 36e5 ? 'AHORA · PRONÓSTICO' : labels[kind] || kind;
+    }
+    if ($('data-kind')) $('data-kind').textContent = labels[kind] || kind;
+    if ($('data-title')) $('data-title').textContent = variableNames[state.variable] || state.variable;
   }
 
   function plot(rows) {
     if (chart) chart.destroy();
     chart = null;
+    if (!$('chart')) return;
     const available = rows.filter(row => row.series?.length);
     if (!available.length) return;
     const datasets = available.map((row, index) => ({
@@ -1900,7 +1860,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const signal = controller.signal, ticket = ++seq;
     record = null; frame = null; comparisonRecords = []; pointFrames.clear();
     activeValue(); renderMap();
-    $('provenance').innerHTML = ''; $('comparison').innerHTML = ''; $('limits').textContent = '';
+    if ($('provenance')) $('provenance').innerHTML = '';
+    if ($('comparison')) $('comparison').innerHTML = '';
+    if ($('limits')) $('limits').textContent = '';
     if (chart) { chart.destroy(); chart = null; }
     try {
       const result = await obtain(state.city_id, signal);
@@ -1914,21 +1876,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       const rows = record ? [record] : [];
       comparisonRecords = rows;
       activeValue(); updateDestinationCard(); renderMap(); plot(rows); queryContext();
-      const climate = result.climatology;
-      const fields = record ? [
-        ['Fuente / producto', record.provider + ' · ' + record.product],
-        ['Frecuencia nativa', record.frequency],
-        ['Obtención UTC', record.fetched_at],
-        ['Muestra seleccionada', result.focus?.sample_date || 'Sin muestra válida'],
-        ['Cobertura', record.series.length + ' registros']
-      ] : climate ? [
-        ['Fuente', 'NASA POWER · referencia mensual 2000–2024'],
-        ['Referencia', climate.count + ' años para el mes ' + climate.month],
-        ['Unidad nativa', climate.unit]
-      ] : [];
-      $('provenance').innerHTML = fields.map(([name, value]) => `<dt>${escape(name)}</dt><dd>${escape(value)}</dd>`).join('');
-      $('limits').textContent = [result.message, ...(record?.limitations || [])].join(' ');
-      if (state.panel === 'impact') await impact();
     } catch (error) {
       if (ticket !== seq || error.name === 'AbortError') return;
       frame = { kind: 'unavailable', focus: null, message: error.message };
@@ -1953,7 +1900,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('scale').onchange = () => { state.scale = $('scale').value; view = Time.view(state.date, state.scale); updateTime(); };
   $('zoom-in').onclick = () => { view = Time.zoom(view, state.date, 0.5); updateAxis(); };
   $('zoom-out').onclick = () => { view = Time.zoom(view, state.date, 2); updateAxis(); };
-  $('present').onclick = () => { stop(); state.mode = 'date'; $('mode').value = 'date'; state.scale = 'daily'; $('scale').value = 'daily'; updateTime(Time.iso(Date.now()), { center: true }); };
+  $('present').onclick = () => { stop(); state.mode = 'date'; if ($('mode')) $('mode').value = 'date'; state.scale = 'daily'; $('scale').value = 'daily'; updateTime(Time.iso(Date.now()), { center: true }); };
   if ($('city')) $('city').onchange = () => selectCity($('city').value);
 
   // Buscador de ciudades
@@ -1991,9 +1938,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!e.target.closest('.city-search')) $('search-dropdown').hidden = true;
   });
 
-  $('source').onchange = () => { state.provider = $('source').value; variables(); scheduleLoad(0); };
+  $('source').onchange = () => { state.provider = $('source').value; variables(); scheduleLoad(0); tools(false); };
   if ($('variable')) $('variable').onchange = () => { state.variable = $('variable').value; queryContext(); scheduleLoad(0); };
-  $('mode').onchange = () => { state.mode = $('mode').value; safe(load)(); panel('data'); tools(false); };
+  if ($('mode')) $('mode').onchange = () => { state.mode = $('mode').value; safe(load)(); tools(false); };
 
   // Calendario mensual
   function calendar() {
@@ -2077,26 +2024,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   async function profile() {
+    if (!$('profile-title') || !$('profile-content')) return;
     const id = state.city_id, result = await api('/api/workspace/profiles/' + id);
     if (id !== state.city_id) return;
     $('profile-title').textContent = result.city.name;
-    $('profile-content').innerHTML = `<p>${escape(result.city.province)} · ${escape(result.city.region)}</p><p class="hint">${result.city.latitude.toFixed(5)}, ${result.city.longitude.toFixed(5)} · centroide GeoRef.</p><div class="profile-radial"><h2>Earth Fingerprint climatológico</h2><div id="radial-result"><div class="chart-wrap"><canvas id="climate-radial"></canvas></div></div></div>`;
-    try {
-      const data = await api('/api/workspace/profiles/' + id + '/climatology-fingerprint');
-      if (id !== state.city_id) return;
-      if (radial) radial.destroy();
-      radial = new Chart($('climate-radial'), {
-        type: 'radar',
-        data: {
-          labels: data.axes.map(a => a.variable),
-          datasets: [{ label: 'Z climatológico', data: data.axes.map(a => a.z_score), borderColor: '#38d9a9', backgroundColor: '#38d9a922' }]
-        },
-        options: { responsive: true, maintainAspectRatio: false, animation: false }
-      });
-    } catch (_) {}
+    $('profile-content').innerHTML = `<p>${escape(result.city.province)} · ${escape(result.city.region)}</p>`;
   }
 
   async function impact() {
+    if (!$('impact-content')) return;
     const city = state.city_id, result = await api('/api/impact?city_id=' + city);
     $('impact-content').innerHTML = `<p class="eyebrow">${escape(result.status)}</p><p>${escape(result.summary)}</p>`;
   }
@@ -2111,9 +2047,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     a.href = url; a.download = 'earthlens-' + state.city_id + '-' + state.variable + '.' + format;
     a.click(); URL.revokeObjectURL(url);
   }
-  $('export-json').onclick = () => download('json');
-  $('export-csv').onclick = () => download('csv');
-  $('report').onclick = () => {
+  if ($('export-json')) $('export-json').onclick = () => download('json');
+  if ($('export-csv')) $('export-csv').onclick = () => download('csv');
+  if ($('report')) $('report').onclick = () => {
     if (!frame?.effective_query) return;
     const { kind, ...selection } = frame.effective_query;
     window.open('/api/workspace/report.pdf?' + new URLSearchParams(selection), '_blank', 'noopener');
@@ -2134,7 +2070,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('source').value = state.provider;
     variables();
     $('scale').value = state.scale;
-    $('mode').value = state.mode;
+    if ($('mode')) $('mode').value = state.mode;
     $('start').value = state.start;
     $('end').value = state.end;
 

@@ -1,6 +1,6 @@
 """Páginas existentes del equipo, servidas por la misma aplicación Flask."""
 
-from flask import Blueprint, render_template
+from flask import Blueprint, redirect, render_template
 
 web = Blueprint("web", __name__)
 
@@ -51,7 +51,7 @@ def index():
 @web.get("/explorer")
 @web.get("/explorer.html")
 def explorer():
-    return render_template("pages/explorer.html")
+    return redirect("/")
 
 
 @web.get("/results")
