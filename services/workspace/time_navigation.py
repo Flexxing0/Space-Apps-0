@@ -1,6 +1,6 @@
 """Resuelve una selección temporal sin unir productos ni fabricar predicciones."""
 from calendar import monthrange
-from datetime import datetime, timedelta, timezone
+from datetime import date as calendar_date, datetime, timedelta, timezone
 from statistics import mean
 import json
 
@@ -12,6 +12,7 @@ TO_WEATHER={'T2M':'temperature_2m','PRECTOTCORR':'precipitation',
     'RH2M':'relative_humidity_2m','WS2M':'wind_speed_10m'}
 TO_POWER={value:key for key,value in TO_WEATHER.items()}
 PROVIDERS={'power','power-daily','era5','forecast','gldas','gpm','modis'}
+POWER_VARIABLES={'T2M','T2M_MAX','T2M_MIN','PRECTOTCORR','RH2M','WS2M'}
 
 
 def selected_time(value):
@@ -44,12 +45,10 @@ class TimeNavigationService:
         native_science=provider in {'gldas','gpm','modis'}
         weather_variable=TO_WEATHER.get(variable,variable if variable in HOURLY else None)
         power_variable=TO_POWER.get(variable,variable)
+        range_contains_cursor=first is not None and first<=day<=last
 
         def unavailable(message):
             return {**packet,'status':'unavailable','kind':'unavailable','message':message}
-
-        if day<today and day.year<1981 and provider in {'power','power-daily','forecast'} and scale!='hourly' and power_variable in {'T2M','T2M_MAX','T2M_MIN','PRECTOTCORR','RH2M','WS2M'}:
-            return unavailable('El producto POWER no cubre años anteriores a 1981. No se generan históricos de respaldo.')
 
         if day>=today:
             if native_science or weather_variable is None:
@@ -72,30 +71,48 @@ class TimeNavigationService:
             packet['message']='Pronóstico horario · Open-Meteo. Emisión única e intervalos de incertidumbre no informados por el endpoint.'
             if variable=='WS2M':packet['message']+=' Viento a 10 m; el histórico WS2M corresponde a 2 m. No se consideran series homogéneas.'
             if variable=='PRECTOTCORR':packet['message']+=' Precipitación horaria en mm; el histórico mensual POWER permanece en mm/day.'
-        elif native_science or (power_variable in {'T2M','T2M_MAX','T2M_MIN','PRECTOTCORR','RH2M','WS2M'} and
-                day.year<=2024 and scale in {'monthly','yearly'} and provider not in {'era5','power-daily'}):
-            begin=first.isoformat() if first and first<=day<=last else f'{day.year}-01-01'
-            finish=min(last.isoformat(),'2024-12-31') if last and first<=day<=last else f'{day.year}-12-31'
+        elif native_science or (power_variable in POWER_VARIABLES and day.year<today.year
+                and scale in {'monthly','yearly'} and provider not in {'era5','power-daily'}):
+            if not native_science and day.year<1981:
+                return unavailable('El producto POWER no cubre años anteriores a 1981. No se generan históricos de respaldo.')
+            begin=first if range_contains_cursor else day.replace(month=1,day=1)
+            finish=last if range_contains_cursor else day.replace(month=12,day=31)
+            if not native_science:
+                begin=max(begin,calendar_date(1981,1,1))
+                finish=min(finish,calendar_date(today.year-1,12,31))
+            begin,finish=begin.isoformat(),finish.isoformat()
             code=variable if native_science else power_variable
-            try:row=self.workspace.series(city_id,code,provider if native_science else 'power',begin,finish)
+            source=provider if native_science else 'power'
+            year_period=(f'{day.year}-01-01',f'{day.year}-12-31')
+            try:
+                row=self.workspace.series(city_id,code,source,begin,finish)
             except ServiceError as error:
-                if not native_science or error.code!='cache_unavailable':raise
-                begin,finish=f'{day.year}-01-01',f'{day.year}-12-31'
-                row=self.workspace.series(city_id,code,provider,begin,finish)
-            packet['effective_query']={'city_id':city_id,'provider':provider if native_science else 'power','variable':code,'start':begin,'end':finish}
-            packet['message']='Histórico de grilla. La muestra mensual representa un mes completo, no un día.'
+                if error.code!='cache_unavailable' or (begin,finish)==year_period:raise
+                begin,finish=year_period
+                row=self.workspace.series(city_id,code,source,begin,finish)
+            if not native_science and row['provenance']['source_period']['end_year']<day.year:
+                begin,finish=year_period
+                row=self.workspace.series(city_id,code,source,begin,finish)
+            packet['effective_query']={'city_id':city_id,'provider':source,'variable':code,'start':begin,'end':finish}
+            packet['message']='Histórico de grilla.'
+            if row['frequency']=='monthly':
+                packet['message']+=' La muestra mensual representa un mes completo, no un día.'
         else:
-            if day.year<1981 and provider!='era5':return unavailable('POWER no dispone de cobertura anterior a 1981. No se generan datos históricos de respaldo.')
             if day>=today-timedelta(days=5):
                 return unavailable('Sin histórico verificado para los últimos cinco días. No se rellenan con un pronóstico ni con el último valor disponible.')
-            if power_variable not in {'T2M','T2M_MAX','T2M_MIN','PRECTOTCORR','RH2M','WS2M'} and weather_variable not in HOURLY:
+            if power_variable not in POWER_VARIABLES and weather_variable not in HOURLY:
                 return unavailable('No hay histórico verificado para esta variable.')
             begin=day.replace(day=1);finish=min(day.replace(day=monthrange(day.year,day.month)[1]),today-timedelta(days=6))
-            hourly=scale=='hourly' or provider=='era5' or power_variable not in {'T2M','T2M_MAX','T2M_MIN','PRECTOTCORR','RH2M','WS2M'}
+            hourly=scale=='hourly' or provider=='era5' or power_variable not in POWER_VARIABLES
             code=weather_variable if hourly else power_variable
+            first_year=1940 if hourly else 1981
+            if day.year<first_year:
+                product='ERA5' if hourly else 'POWER'
+                return unavailable(f'{product} no cubre años anteriores a {first_year}. No se generan históricos de respaldo.')
             if hourly and code in {None,'precipitation_probability','visibility'}:
                 return unavailable('El histórico horario ERA5 integrado no incluye esa variable. No se fabrica una probabilidad histórica.')
-            if mode=='range' and first and (last-first).days<=366 and last<today-timedelta(days=5):begin,finish=first,last
+            if mode=='range' and range_contains_cursor and (last-first).days<=366 and last<today-timedelta(days=5):
+                begin,finish=max(first,calendar_date(first_year,1,1)),last
             query={'city_id':city_id,'kind':'reanalysis' if hourly else 'power-daily','variable':code,'start':begin.isoformat(),'end':finish.isoformat()}
             if mode!='range':
                 for path in self.weather.cache.directory.glob('*.json'):

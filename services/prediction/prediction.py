@@ -17,6 +17,10 @@ def capabilities():
         'independent_from_operational_weather':True,'validation':'not_run','recommended_dates_enabled':False}
 
 
+def seasonal_naive_7d(training, horizon):
+    return [training[-7+i%7] for i in range(horizon)]
+
+
 def backtest_daily(series,cuts,horizons=(1,3,7),predictor=None):
     """Cortes son índices exclusivos del entrenamiento; sólo datos diarios contiguos.
 
@@ -32,7 +36,7 @@ def backtest_daily(series,cuts,horizons=(1,3,7),predictor=None):
     rows=[]
     for cut in cuts:
         train=[float(p['value']) for p in series[:cut]];observed=[float(p['value']) for p in series[cut:cut+max(horizons)]]
-        candidates={'persistence':{'point':[train[-1]]*max(horizons)},'seasonal_naive_7d':{'point':[train[-7+i%7] for i in range(max(horizons))]}}
+        candidates={'persistence':{'point':[train[-1]]*max(horizons)},'seasonal_naive_7d':{'point':seasonal_naive_7d(train,max(horizons))}}
         if predictor is not None:candidates['experimental_model']=predictor(train.copy(),max(horizons))
         for name,result in candidates.items():
             if len(result['point'])<max(horizons) or any(not isfinite(v) for v in result['point']):raise ValueError('Predicción inválida')

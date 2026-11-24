@@ -32,18 +32,24 @@ class WorkspaceService:
         if provider == 'power':
             if variable not in {v['code'] for v in self.data.list_variables()}:
                 raise ServiceError('invalid_request', 'Variable POWER desconocida.')
-            if first.year>2024:raise ServiceError('cache_unavailable','El histórico mensual local termina en 2024; no se completan años posteriores.')
-            requested={'start_year':first.year,'end_year':min(last.year,2024)}
-            period={'start_year':2000,'end_year':2024} if 2000<=first.year<=min(last.year,2024)<=2024 else requested
-            query = make_query(city['latitude'], city['longitude'], **period)
-            entry = self.data.bulk.cache.read(query)
+            if first.year<1981:
+                raise ServiceError('invalid_request', 'El histórico POWER requiere fechas desde 1981.')
+            requested={'start_year':first.year,'end_year':last.year}
+            reference={'start_year':2000,'end_year':2024}
+            period=reference if 2000<=first.year<=last.year<=2024 else requested
+            entry=self._read_power(city,period)
             if entry is None:
                 period=self.science._power_source_period(city,requested)
-                query=make_query(city['latitude'],city['longitude'],**period)
-                entry=self.data.bulk.cache.read(query)
+                entry=self._read_power(city,period)
+            if entry is None and first.year<=2024<last.year:
+                historical={**requested,'end_year':2024}
+                period=reference if first.year>=2000 else historical
+                entry=self._read_power(city,period)
+                if entry is None:
+                    period=self.science._power_source_period(city,historical)
+                    entry=self._read_power(city,period)
             if entry is None:
                 raise ServiceError('cache_unavailable', 'No hay histórico mensual cacheado para este intervalo.')
-            validate_power_data(entry['data'], query)
             row = entry['data'][variable]
             points = [{'date':p['date']+'-01', 'value':p['value']} for p in row['series']]
             record = {'provider':'NASA POWER','product':'POWER_MONTHLY_AG','variable':variable,
@@ -67,6 +73,16 @@ class WorkspaceService:
             'missing':sum(p['value'] is None for p in selected)},
             'limitations':['No son mediciones de una estación local. Los huecos permanecen vacíos.',
                 'Un valor mensual representa el mes, no el tiempo de un día concreto.']}
+
+    def _read_power(self, city, period):
+        query = make_query(city['latitude'], city['longitude'], **period)
+        try:
+            entry = self.data.bulk.cache.read(query)
+            if entry is not None:
+                validate_power_data(entry['data'], query)
+            return entry
+        except (ValueError, KeyError, TypeError):
+            return None
 
     def profile(self, city_id):
         city = self.data.get_city(city_id)

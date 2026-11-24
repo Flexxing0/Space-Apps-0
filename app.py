@@ -22,7 +22,9 @@ from services.workspace.workspace import WorkspaceService
 from api.workspace import workspace_api
 from services.weather.weather import WeatherService
 from api.weather import weather_api
+from api.predictions import predictions_api
 from services.storage.persistence import Store
+from services.storage.predictions import SQLitePredictions
 from services.events.events import EventService
 from api.events import events_api
 from services.events.planning import PlanningService
@@ -41,6 +43,7 @@ def create_app(config=None):
         RADAR_ARTIFACT_PATH=None,
         WEATHER_COMMERCIAL=False,
         DATABASE_PATH=None,
+        PREDICTION_DATABASE_PATH=None,
         SECRET_KEY=secrets.token_hex(32),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
@@ -68,6 +71,9 @@ def create_app(config=None):
     app.extensions['earthlens_workspace'] = WorkspaceService(app.extensions['earthlens_service'], app.extensions['earthlens_science'], app.extensions['earthlens_analysis'])
     app.extensions['earthlens_weather'] = WeatherService(app.extensions['earthlens_service'], Path(app.config['CACHE_DIR']).parent/'weather', commercial=app.config['WEATHER_COMMERCIAL'])
     app.extensions['earthlens_store'] = Store(app.config['DATABASE_PATH'] or Path(app.config['CACHE_DIR']).parent.parent/'runtime'/'earthlens.sqlite3')
+    prediction_path = app.config['PREDICTION_DATABASE_PATH'] or (
+        Path(app.config['CACHE_DIR']).parent.parent / 'runtime' / 'predictions.sqlite3')
+    app.extensions['earthlens_prediction_reader'] = SQLitePredictions(prediction_path)
     app.extensions['earthlens_events'] = EventService(app.extensions['earthlens_store'],app.extensions['earthlens_service'])
     app.extensions['earthlens_planning'] = PlanningService(app.extensions['earthlens_weather'])
     app.extensions['earthlens_navigation'] = TimeNavigationService(app.extensions['earthlens_workspace'],app.extensions['earthlens_weather'])
@@ -78,6 +84,7 @@ def create_app(config=None):
     app.register_blueprint(scientific_api)
     app.register_blueprint(workspace_api)
     app.register_blueprint(weather_api)
+    app.register_blueprint(predictions_api)
     app.register_blueprint(events_api)
     @app.after_request
     def private_response_headers(response):

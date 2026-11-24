@@ -7,6 +7,8 @@ import unittest
 from unittest.mock import Mock,patch
 
 from app import create_app
+from services.providers.giovanni import POLICY, PRODUCTS
+from services.science.scientific import make_record
 from tests.providers.test_bulk import synthetic_payload
 
 
@@ -28,10 +30,102 @@ class TimeNavigationTests(unittest.TestCase):
         params={'city_id':'mendoza','date':'2026-11-16T12:00','variable':'T2M','provider':'power','scale':'daily',**kwargs}
         return self.client.get('/api/workspace/frame',query_string=params)
 
-    def seed(self):
+    def seed(self, first=2000, last=2024):
         def respond(url,*,params,timeout):return Mock(json=Mock(return_value=synthetic_payload(params)))
         with patch('services.providers.power.requests.get',side_effect=respond):
-            self.app.extensions['earthlens_service'].get_data({'city_id':'mendoza','start_year':2000,'end_year':2024})
+            self.app.extensions['earthlens_service'].get_data({'city_id':'mendoza','start_year':first,'end_year':last})
+
+    def test_power_monthly_after_reference_period_uses_verified_cache(self):
+        self.seed(2025, 2025)
+        with patch('requests.sessions.Session.request', side_effect=AssertionError('No network')):
+            response = self.frame(date='2025-05-10', scale='monthly')
+            series = self.client.get('/api/workspace/series', query_string={
+                'city_id': 'mendoza', 'start': '2025-05-01', 'end': '2025-05-31'})
+        self.assertEqual(response.status_code, 200, response.json)
+        self.assertEqual(response.json['data']['record']['product'], 'POWER_MONTHLY_AG')
+        self.assertEqual(response.json['data']['focus']['sample_date'], '2025-05-01')
+        self.assertEqual(series.status_code, 200, series.json)
+        self.weather.series.assert_not_called()
+
+    def test_native_science_range_includes_selected_month_after_2024(self):
+        store = self.app.extensions['earthlens_science'].store
+        city = self.app.extensions['earthlens_service'].get_city('mendoza')
+        period = {'start_year': 2024, 'end_year': 2025}
+        for provider, variable, unit in (
+            ('gpm', 'precipitation', 'mm/hr'), ('gldas', 'SoilMoi0_10cm_inst', 'kg m-2'),
+        ):
+            with self.subTest(provider=provider):
+                config = PRODUCTS[provider]
+                version = config['version']
+                revision = f'{version}-giovanni-csv-v1'
+                row = make_record(provider=provider, product=config['product'], product_version=version,
+                    cache_version=revision, variable=variable, unit=unit, frequency='monthly',
+                    location=city, period=period, resolution={'software_test_only': True},
+                    series=[{'date': '2024-12-01', 'value': 2.0}, {'date': '2025-05-01', 'value': 0.0}],
+                    fetched_at=self.now.isoformat(), metadata={'software_test_only': True},
+                    provenance={'source_urls': ['https://software-test.invalid']})
+                store.write(store.query(provider, config['product'], revision, variable, city, period, POLICY), row)
+                with patch('requests.sessions.Session.request', side_effect=AssertionError('No network')):
+                    response = self.frame(date='2025-05-10', scale='monthly', provider=provider,
+                                          variable=variable, start='2024-05-01', end='2025-05-31')
+                    missing = self.frame(city_id='ushuaia', date='2025-05-10', provider=provider, variable=variable)
+                self.assertEqual(response.status_code, 200, response.json)
+                data = response.json['data']
+                self.assertEqual(data['effective_query']['end'], '2025-05-31')
+                self.assertEqual(data['focus']['value'], 0.0)
+                self.assertEqual(data['focus']['unit'], unit)
+                self.assertEqual(missing.status_code, 503)
+                self.assertEqual(missing.json['error']['code'], 'cache_unavailable')
+
+    def test_direct_monthly_series_before_power_start_returns_validation_error(self):
+        response = self.client.get('/api/workspace/series', query_string={
+            'city_id': 'mendoza', 'start': '1979-03-01', 'end': '1979-03-31'})
+        self.assertEqual(response.status_code, 400, response.json)
+        self.assertEqual(response.json['error']['code'], 'invalid_request')
+
+    def test_monthly_cross_reference_range_preserves_series_and_finds_cursor_year(self):
+        self.seed()
+        self.seed(2025, 2025)
+        with patch('requests.sessions.Session.request', side_effect=AssertionError('No network')):
+            response = self.frame(date='2025-05-10', scale='monthly',
+                                  start='2024-05-01', end='2025-05-31')
+            legacy = self.client.get('/api/workspace/series', query_string={
+                'city_id': 'mendoza', 'start': '2024-12-01', 'end': '2025-05-31'})
+        self.assertEqual(response.status_code, 200, response.json)
+        self.assertEqual(response.json['data']['focus']['sample_date'], '2025-05-01')
+        self.assertEqual(legacy.status_code, 200, legacy.json)
+        self.assertEqual([p['date'] for p in legacy.json['data']['series']], ['2024-12-01'])
+
+    def test_era5_can_resolve_hourly_dates_before_power_starts(self):
+        row = self.weather.series.return_value
+        row.update(kind='reanalysis', series=[{'date': '1979-03-29T12:00:00+00:00', 'value': 3.0}])
+        response = self.frame(date='1979-03-29', scale='hourly')
+        self.assertEqual(response.status_code, 200, response.json)
+        data = response.json['data']
+        self.assertEqual(data['effective_query']['provider'], 'era5')
+        self.assertEqual(data['focus']['value'], 3.0)
+
+    def test_historical_range_outside_cursor_keeps_its_native_sample(self):
+        self.weather.series.side_effect = lambda **query: {
+            'frequency': 'daily', 'unit': 'C', 'kind': 'reanalysis',
+            'series': [{'date': query['start'], 'value': 2.0},
+                       {'date': '2017-03-29', 'value': 3.0}] if query['start'] == '2017-03-01' else []}
+        response = self.frame(date='2017-03-29', mode='range', start='2017-02-01', end='2017-02-28')
+        self.assertEqual(response.status_code, 200, response.json)
+        self.assertEqual(response.json['data']['focus']['value'], 3.0)
+
+    def test_corrupt_power_cache_does_not_hide_a_compatible_extraction(self):
+        from services.providers.bulk import make_query
+        self.seed(2017, 2017)
+        bulk = self.app.extensions['earthlens_service'].bulk
+        city = self.app.extensions['earthlens_service'].get_city('mendoza')
+        corrupt = bulk.cache.path_for(make_query(city['latitude'], city['longitude'], 2000, 2024))
+        corrupt.write_text('{', encoding='utf-8')
+        with patch('requests.sessions.Session.request', side_effect=AssertionError('No network')):
+            response = self.frame(date='2017-03-29', scale='monthly')
+        self.assertEqual(response.status_code, 200, response.json)
+        self.assertEqual(response.json['data']['focus']['sample_date'], '2017-03-01')
+        self.assertEqual(corrupt.read_text(encoding='utf-8'), '{')
 
     def test_root_is_the_tool_with_initially_closed_panels(self):
         html=self.client.get('/').get_data(as_text=True)
