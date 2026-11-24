@@ -31,33 +31,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   let weatherForecastCache = new Map(), cityProfileCache = new Map(), cityPhotoCache = new Map();
   let savedCities = new Set();
 
-  // Artículos exactos de Wikipedia Argentina para obtener fotos reales de las 25 ciudades
+  // Artículos exactos de Wikipedia (ES y EN) para las 25 ciudades argentinas del catálogo
   const CITY_WIKI_TITLES = {
-    'comodoro-rivadavia': 'Comodoro_Rivadavia',
-    'puerto-madryn': 'Puerto_Madryn',
-    'trelew': 'Trelew',
-    'rio-gallegos': 'Río_Gallegos',
-    'ushuaia': 'Ushuaia',
-    'bariloche': 'San_Carlos_de_Bariloche',
-    'neuquen': 'Neuquén_(ciudad)',
-    'buenos-aires': 'Buenos_Aires',
-    'la-plata': 'La_Plata',
-    'mar-del-plata': 'Mar_del_Plata',
-    'bahia-blanca': 'Bahía_Blanca',
-    'rosario': 'Rosario_(Argentina)',
-    'cordoba': 'Córdoba_(Argentina)',
-    'santa-fe': 'Santa_Fe_(Argentina)',
-    'mendoza': 'Mendoza_(Argentina)',
-    'san-juan': 'San_Juan_(Argentina)',
-    'san-luis': 'San_Luis_(Argentina)',
-    'salta': 'Salta',
-    'san-salvador-de-jujuy': 'San_Salvador_de_Jujuy',
-    'san-miguel-de-tucuman': 'San_Miguel_de_Tucumán',
-    'santiago-del-estero': 'Santiago_del_Estero_(ciudad)',
-    'posadas': 'Posadas_(Argentina)',
-    'corrientes': 'Corrientes_(ciudad)',
-    'resistencia': 'Resistencia_(ciudad)',
-    'formosa': 'Formosa_(ciudad)'
+    'comodoro-rivadavia': { es: 'Comodoro Rivadavia', en: 'Comodoro Rivadavia' },
+    'puerto-madryn': { es: 'Puerto Madryn', en: 'Puerto Madryn' },
+    'trelew': { es: 'Trelew', en: 'Trelew' },
+    'rio-gallegos': { es: 'Río Gallegos', en: 'Río Gallegos, Santa Cruz' },
+    'ushuaia': { es: 'Ushuaia', en: 'Ushuaia' },
+    'bariloche': { es: 'San Carlos de Bariloche', en: 'Bariloche' },
+    'neuquen': { es: 'Neuquén (ciudad)', en: 'Neuquén' },
+    'buenos-aires': { es: 'Buenos Aires', en: 'Buenos Aires' },
+    'la-plata': { es: 'La Plata', en: 'La Plata' },
+    'mar-del-plata': { es: 'Mar del Plata', en: 'Mar del Plata' },
+    'bahia-blanca': { es: 'Bahía Blanca', en: 'Bahía Blanca' },
+    'rosario': { es: 'Rosario (Argentina)', en: 'Rosario, Santa Fe' },
+    'cordoba': { es: 'Córdoba (Argentina)', en: 'Córdoba, Argentina' },
+    'santa-fe': { es: 'Santa Fe (Argentina)', en: 'Santa Fe, Argentina' },
+    'mendoza': { es: 'Mendoza (Argentina)', en: 'Mendoza, Argentina' },
+    'san-juan': { es: 'San Juan (Argentina)', en: 'San Juan, Argentina' },
+    'san-luis': { es: 'San Luis (Argentina)', en: 'San Luis, Argentina' },
+    'salta': { es: 'Salta', en: 'Salta' },
+    'san-salvador-de-jujuy': { es: 'San Salvador de Jujuy', en: 'San Salvador de Jujuy' },
+    'san-miguel-de-tucuman': { es: 'San Miguel de Tucumán', en: 'San Miguel de Tucumán' },
+    'santiago-del-estero': { es: 'Santiago del Estero (ciudad)', en: 'Santiago del Estero' },
+    'posadas': { es: 'Posadas (Argentina)', en: 'Posadas, Misiones' },
+    'corrientes': { es: 'Corrientes (ciudad)', en: 'Corrientes' },
+    'resistencia': { es: 'Resistencia (ciudad)', en: 'Resistencia, Chaco' },
+    'formosa': { es: 'Formosa (ciudad)', en: 'Formosa, Argentina' }
   };
 
   function offsetIsoDate(daysOffset, baseIso) {
@@ -827,101 +827,202 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateCityPhotoAndClimatology(city.id);
   }
 
-  async function resolveCityPhoto(city, backendImage) {
-    if (backendImage?.image_url) {
-      return {
-        url: backendImage.image_url,
-        label: city.name,
-        credit: `${backendImage.caption || backendImage.title || city.name} · ${backendImage.author || 'Wikimedia Commons'} (${backendImage.license || 'CC'})`
-      };
-    }
-    if (cityPhotoCache.has(city.id)) return cityPhotoCache.get(city.id);
+  function isAcceptablePhotoUrl(url, title = '') {
+    if (!url) return false;
+    const text = (url + ' ' + title).toLowerCase();
+    if (text.includes('.svg')) return false;
+    const forbidden = ['escudo', 'bandera', 'flag_of', 'coat_of_arms', 'location_map', 'mapa_', 'locator', 'blank_map', 'logo', 'seal_of', 'emblem'];
+    if (forbidden.some(bad => text.includes(bad))) return false;
+    return /\.(jpe?g|png|webp)(\?|$)/i.test(url.split('/').pop() || '') || /\/thumb\//.test(url);
+  }
 
-    let resolved = null;
-    const wikiTitle = CITY_WIKI_TITLES[city.id] || encodeURIComponent(city.name);
-
-    // 1) Foto principal del artículo oficial de Wikipedia Argentina (con CORS abierto)
+  async function fetchWikiPageImage(lang, title) {
     try {
-      const resp = await fetch(`https://es.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle)}`);
-      if (resp.ok) {
-        const data = await resp.json();
-        const candidateUrl = data.thumbnail?.source || data.originalimage?.source || '';
-        const lower = candidateUrl.toLowerCase();
-        const isPhoto = /\.(jpe?g|webp)(\?|$)/i.test(lower) && !lower.includes('escudo') && !lower.includes('bandera') && !lower.includes('flag') && !lower.includes('coat_of_arms') && !lower.includes('location_map');
-        if (candidateUrl && isPhoto) {
-          const crispUrl = candidateUrl.replace(/\/\d+px-/, '/800px-');
-          resolved = {
-            url: crispUrl,
-            label: `Foto · ${city.name}`,
-            credit: `Fotografía ilustrativa de ${data.title || city.name} vía Wikipedia / Wikimedia Commons`
+      const qs = new URLSearchParams({
+        action: 'query',
+        titles: title,
+        prop: 'pageimages',
+        piprop: 'thumbnail',
+        pithumbsize: '640',
+        redirects: '1',
+        format: 'json',
+        origin: '*'
+      });
+      const resp = await fetch(`https://${lang}.wikipedia.org/w/api.php?` + qs);
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      const pages = Object.values(data.query?.pages || {});
+      for (const page of pages) {
+        const src = page.thumbnail?.source;
+        if (src && isAcceptablePhotoUrl(src, page.pageimage || page.title || '')) {
+          return {
+            url: src,
+            credit: `Fotografía ilustrativa de ${page.title || title} vía Wikipedia (${lang.toUpperCase()})`
           };
         }
       }
     } catch (_) {}
-
-    // 2) Respaldo geolocalizado en Wikimedia Commons cerca del centroide GeoRef de la ciudad
-    if (!resolved) {
-      try {
-        const qs = new URLSearchParams({
-          action: 'query',
-          generator: 'geosearch',
-          ggscoord: `${city.latitude}|${city.longitude}`,
-          ggsradius: '6000',
-          ggslimit: '12',
-          ggsnamespace: '6',
-          prop: 'imageinfo',
-          iiprop: 'url',
-          iiurlwidth: '800',
-          format: 'json',
-          origin: '*'
-        });
-        const resp = await fetch('https://commons.wikimedia.org/w/api.php?' + qs);
-        if (resp.ok) {
-          const data = await resp.json();
-          const pages = Object.values(data.query?.pages || {});
-          const photoPage = pages.find(p => {
-            const t = (p.title || '').toLowerCase();
-            return (t.endsWith('.jpg') || t.endsWith('.jpeg')) && !t.includes('escudo') && !t.includes('mapa') && p.imageinfo?.[0]?.thumburl;
-          });
-          if (photoPage) {
-            resolved = {
-              url: photoPage.imageinfo[0].thumburl,
-              label: `Foto · ${city.name}`,
-              credit: `${photoPage.title.replace(/^File:/i, '')} · Wikimedia Commons`
-            };
-          }
-        }
-      } catch (_) {}
-    }
-
-    cityPhotoCache.set(city.id, resolved);
-    return resolved;
+    return null;
   }
 
-  function applyCityPhoto(photoObj, cityName) {
+  async function fetchCommonsSearchPhotos(city) {
+    const found = [];
+    try {
+      const qs = new URLSearchParams({
+        action: 'query',
+        generator: 'search',
+        gsrsearch: `filetype:bitmap ${city.name} Argentina`,
+        gsrnamespace: '6',
+        gsrlimit: '15',
+        prop: 'imageinfo',
+        iiprop: 'url|mime|dimensions',
+        iiurlwidth: '640',
+        format: 'json',
+        origin: '*'
+      });
+      const resp = await fetch('https://commons.wikimedia.org/w/api.php?' + qs);
+      if (!resp.ok) return found;
+      const data = await resp.json();
+      const pages = Object.values(data.query?.pages || {});
+      // Priorizar imágenes horizontales reales (paisajes/vistas urbanas)
+      pages.sort((a, b) => {
+        const ia = a.imageinfo?.[0] || {}, ib = b.imageinfo?.[0] || {};
+        const aLand = (ia.width || 0) >= (ia.height || 1) ? 0 : 1;
+        const bLand = (ib.width || 0) >= (ib.height || 1) ? 0 : 1;
+        return aLand - bLand;
+      });
+      for (const p of pages) {
+        const info = p.imageinfo?.[0];
+        const url = info?.thumburl || info?.url;
+        if (url && info?.mime?.startsWith('image/jpeg') && isAcceptablePhotoUrl(url, p.title || '')) {
+          found.push({
+            url,
+            credit: `${(p.title || '').replace(/^File:/i, '')} · Wikimedia Commons`
+          });
+          if (found.length >= 3) break;
+        }
+      }
+    } catch (_) {}
+    return found;
+  }
+
+  async function fetchCommonsGeoPhotos(city) {
+    const found = [];
+    try {
+      const qs = new URLSearchParams({
+        action: 'query',
+        generator: 'geosearch',
+        ggscoord: `${city.latitude}|${city.longitude}`,
+        ggsradius: '10000',
+        ggslimit: '15',
+        ggsnamespace: '6',
+        prop: 'imageinfo',
+        iiprop: 'url|mime',
+        iiurlwidth: '640',
+        format: 'json',
+        origin: '*'
+      });
+      const resp = await fetch('https://commons.wikimedia.org/w/api.php?' + qs);
+      if (!resp.ok) return found;
+      const data = await resp.json();
+      for (const p of Object.values(data.query?.pages || {})) {
+        const info = p.imageinfo?.[0];
+        const url = info?.thumburl || info?.url;
+        if (url && info?.mime?.startsWith('image/jpeg') && isAcceptablePhotoUrl(url, p.title || '')) {
+          found.push({
+            url,
+            credit: `${(p.title || '').replace(/^File:/i, '')} · Wikimedia Commons`
+          });
+          if (found.length >= 2) break;
+        }
+      }
+    } catch (_) {}
+    return found;
+  }
+
+  async function resolveCityPhotoCandidates(city, backendImage) {
+    if (backendImage?.image_url) {
+      return [{
+        url: backendImage.image_url,
+        label: `Foto · ${city.name}`,
+        credit: `${backendImage.caption || backendImage.title || city.name} · ${backendImage.author || 'EarthLens'}`
+      }];
+    }
+    if (cityPhotoCache.has(city.id)) return cityPhotoCache.get(city.id);
+
+    const candidates = [];
+    const seen = new Set();
+    const pushUnique = item => {
+      if (item?.url && !seen.has(item.url)) {
+        seen.add(item.url);
+        candidates.push({ url: item.url, label: `Foto · ${city.name}`, credit: item.credit });
+      }
+    };
+
+    const titles = CITY_WIKI_TITLES[city.id] || { es: city.name, en: `${city.name}, Argentina` };
+
+    // 1) Wikipedia ES y EN en paralelo (sin reescribir URLs de thumbnails)
+    const [esImg, enImg] = await Promise.all([
+      fetchWikiPageImage('es', titles.es),
+      fetchWikiPageImage('en', titles.en)
+    ]);
+    pushUnique(esImg);
+    pushUnique(enImg);
+
+    // 2) Si faltan candidatas o para tener respaldo garantizado, buscar en Wikimedia Commons
+    if (candidates.length < 2) {
+      const searchPhotos = await fetchCommonsSearchPhotos(city);
+      searchPhotos.forEach(pushUnique);
+    }
+    if (candidates.length === 0) {
+      const geoPhotos = await fetchCommonsGeoPhotos(city);
+      geoPhotos.forEach(pushUnique);
+    }
+
+    cityPhotoCache.set(city.id, candidates);
+    return candidates;
+  }
+
+  function applyCityPhoto(candidates, cityName) {
     const imgEl = $('dest-photo-img');
     const labelEl = $('dest-photo-label');
-    if (photoObj && photoObj.url) {
-      imgEl.onload = () => { imgEl.hidden = false; };
-      imgEl.onerror = () => {
-        imgEl.hidden = true;
-        labelEl.textContent = 'Foto del destino';
-      };
-      imgEl.src = photoObj.url;
-      imgEl.alt = `Fotografía de ${cityName}`;
-      imgEl.hidden = false;
-      labelEl.textContent = photoObj.label || 'Foto del destino';
-      labelEl.title = photoObj.credit || `Foto ilustrativa de ${cityName}`;
-    } else {
+    if (!candidates || !candidates.length) {
       imgEl.hidden = true;
       labelEl.textContent = 'Foto del destino';
       labelEl.title = 'Ilustración representativa del destino';
+      return;
     }
+
+    let idx = 0;
+    const tryLoad = () => {
+      if (idx >= candidates.length) {
+        imgEl.hidden = true;
+        labelEl.textContent = 'Foto del destino';
+        labelEl.title = 'Ilustración representativa del destino';
+        return;
+      }
+      const current = candidates[idx];
+      imgEl.onload = () => {
+        imgEl.hidden = false;
+        labelEl.textContent = current.label || `Foto · ${cityName}`;
+        labelEl.title = current.credit || `Foto ilustrativa de ${cityName}`;
+      };
+      imgEl.onerror = () => {
+        idx += 1;
+        tryLoad();
+      };
+      imgEl.alt = `Fotografía de ${cityName}`;
+      imgEl.src = current.url;
+    };
+    tryLoad();
   }
 
   async function updateCityPhotoAndClimatology(cityId) {
     const city = cities.find(c => c.id === cityId);
     if (!city) return;
+    $('dest-photo-img').hidden = true;
+    $('dest-photo-label').textContent = 'Cargando foto…';
+
     let prof = cityProfileCache.get(cityId);
     try {
       if (!prof) {
@@ -934,9 +1035,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderBestSeasonBars(null);
     }
 
-    const photoObj = await resolveCityPhoto(city, prof?.general?.image);
+    const candidates = await resolveCityPhotoCandidates(city, prof?.general?.image);
     if (cityId !== state.city_id) return;
-    applyCityPhoto(photoObj, city.name);
+    applyCityPhoto(candidates, city.name);
   }
 
   function renderBestSeasonBars(prof) {

@@ -125,6 +125,16 @@ class WorkspaceService:
             image=json.loads((root/'photos'/f'{city_id}.json').read_text(encoding='utf-8'))
             if image['city_id']==city_id and image['status']=='available':general['image']=image
         except (OSError,ValueError,KeyError,TypeError):pass
+        if general['image'] is None:
+            from pathlib import Path as _Path
+            local_dir=_Path('static/img/cities')
+            for ext in ('jpg','jpeg','webp','png'):
+                candidate=local_dir/f'{city_id}.{ext}'
+                if candidate.is_file():
+                    general['image']={'city_id':city_id,'status':'available','title':city['name'],
+                        'caption':f'Fotografía de {city["name"]}','author':'Archivo local EarthLens',
+                        'license':'Local','image_url':f'/static/img/cities/{city_id}.{ext}','source_url':''}
+                    break
         return {'city':city,'reference_period':{'start_year':2000,'end_year':2024},
             'climatology':variables,'method':'Media aritmética de cada mes entre años disponibles; desviación poblacional descriptiva.',
             'native_variables':native,
