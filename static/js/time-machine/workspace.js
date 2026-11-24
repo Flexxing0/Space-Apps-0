@@ -325,6 +325,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       calendar: 'Agenda y Calendario',
       notifications: 'Notificaciones',
       'add-event': 'Agregar evento',
+      'event-detail': 'Detalle del evento',
       prediction: 'Predicción climática',
       saved: 'Guardados',
       data: 'Datos científicos',
@@ -1212,7 +1213,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             </span>
           </div>
           <div class="actions" style="margin-top:6px">
-            <button type="button" class="btn-text-teal" data-view-ev="${escape(ev.id)}">Predicción</button>
+            <button type="button" class="btn-text-teal" data-view-ev="${escape(ev.id)}">Ver evento</button>
             <button type="button" class="btn-text-teal" data-edit-quick-ev="${escape(ev.id)}">Editar</button>
             <button type="button" class="btn-danger-outline" data-del-ev="${escape(ev.id)}">Eliminar</button>
           </div>
@@ -1224,10 +1225,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       btn.onclick = async () => {
         const pair = enriched.find(x => x.ev.id === btn.dataset.viewEv);
         if (!pair) return;
-        if (pair.ev.city_id !== state.city_id) selectCity(pair.ev.city_id, { fetchData: false });
-        updateTime(pair.ev.start.slice(0, 10), { center: true });
-        panel('add-event');
-        showSavedEventPredictionCard(pair.ev, pair.wx, null);
+        await openEventDetail(pair.ev, null, { wx: pair.wx, backPanel: 'calendar' });
       };
     });
 
@@ -1308,11 +1306,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       btn.onclick = safe(async () => {
         const ev = events.find(e => e.id === btn.dataset.gotoNotifEv);
         if (ev) {
-          selectCity(ev.city_id, { fetchData: false });
-          updateTime(ev.start.slice(0, 10), { center: true });
-          const wx = await computeEventWeatherSummary(ev);
-          panel('add-event');
-          showSavedEventPredictionCard(ev, wx, null);
+          await openEventDetail(ev, null, { backPanel: 'notifications' });
         } else {
           panel('calendar');
         }
@@ -1374,48 +1368,161 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  function showSavedEventPredictionCard(ev, wx, evalResult) {
-    const box = $('quick-event-result');
-    box.hidden = false;
-    const cityName = cities.find(c => c.id === ev.city_id)?.name || ev.city_id;
+  const ACTIVITY_LABELS = {
+    outdoor: 'Aire libre / Mirador',
+    coastal: 'Costanera y playa',
+    hiking: 'Trekking / Senderismo',
+    excursion: 'Excursión turística',
+    urban: 'Paseo urbano',
+    sport: 'Deporte al aire libre',
+    indoor: 'Museo / Bajo techo',
+    camping: 'Camping',
+    cycling: 'Ciclismo',
+    custom: 'Personalizada'
+  };
+
+  async function openEventDetail(ev, evalResult = null, options = {}) {
+    if (!ev) return;
+    if (ev.city_id && ev.city_id !== state.city_id) {
+      selectCity(ev.city_id, { fetchData: false });
+    }
+    const dateStr = ev.start.slice(0, 10);
+    updateTime(dateStr, { center: true });
+
+    const wx = options.wx || await computeEventWeatherSummary(ev);
+    const city = cities.find(c => c.id === ev.city_id) || { name: ev.city_id, province: '', region: '' };
+    const fullDate = new Date(Time.parse(dateStr)).toLocaleDateString('es-AR', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC'
+    });
+    const startHour = ev.start.slice(11, 16);
+    const endHour = ev.end ? ev.end.slice(11, 16) : '';
+    const actLabel = ACTIVITY_LABELS[ev.activity] || ev.activity || 'Actividad turística';
     const assessment = evalResult?.assessment;
     const statusBanner = assessment?.label || `${wx.tag} según predicción`;
     const alternatives = (evalResult?.alternatives || []).slice(0, 2);
+    const backPanel = options.backPanel || 'calendar';
+    const backLabel = backPanel === 'notifications' ? '← Volver a Notificaciones'
+      : backPanel === 'saved' ? '← Volver a Guardados'
+      : backPanel === 'events' ? '← Volver a Mi cuenta'
+      : '← Volver a la Agenda';
 
-    box.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-        <span class="visit-badge badge-good">✓ Guardado en la cuenta @${escape(user?.username || '')}</span>
-        <span class="todo-tag ${escape(wx.tagClass)}">${escape(wx.tag)}</span>
-      </div>
-      <h3 style="margin:0;font-size:16px;color:#fff">${escape(ev.name)}</h3>
-      <p class="hint" style="margin:3px 0 10px">${escape(ev.start.slice(0, 10))} a las ${escape(ev.start.slice(11, 16))} hs · ${escape(ev.location_label || cityName)}</p>
+    const wearItems = [];
+    if (wx.windKmh >= 22) wearItems.push('Cortaviento');
+    if (wx.uv >= 5 || wx.icon === 'sun') wearItems.push('Anteojos de sol', 'Protector solar', 'Gorra');
+    if (wx.rainProb >= 35) wearItems.push('Piloto impermeable');
+    if (wx.temp <= 14) wearItems.push('Abrigo térmico');
+    for (const extra of ['Cortaviento', 'Protector solar', 'Calzado cómodo']) {
+      if (!wearItems.includes(extra) && wearItems.length < 4) wearItems.push(extra);
+    }
 
-      <div class="pred-result-grid">
-        <div class="pred-metric-card"><span>Temperatura</span><strong>${wx.temp} °C</strong></div>
-        <div class="pred-metric-card"><span>Lluvia</span><strong>${wx.rainProb} %</strong></div>
-        <div class="pred-metric-card"><span>Viento</span><strong>${wx.windKmh} km/h</strong></div>
-        <div class="pred-metric-card"><span>Índice UV</span><strong>${wx.uv} (${wx.uv >= 8 ? 'Alto' : wx.uv >= 5 ? 'Moderado' : 'Bajo'})</strong></div>
-        <div class="pred-metric-card" style="grid-column:span 2"><span>Confianza</span><strong>${escape(wx.confidence)}</strong></div>
-      </div>
+    $('event-detail-view').innerHTML = `
+      <button type="button" id="ev-detail-back" class="event-detail-back">${escape(backLabel)}</button>
 
-      <div class="pred-recommendation-box">
-        <strong>Evaluación (${escape(statusBanner)}):</strong> ${escape(wx.recommendation)}
-        ${ev.notifications ? '<br><small style="color:#38d9a9">🔔 Seguimiento guardado en tu cuenta: avisaremos si cambia la predicción.</small>' : ''}
-      </div>
-
-      ${alternatives.length ? `
-        <div style="margin-top:10px">
-          <p class="sub-eyebrow" style="margin:6px 0">ALTERNATIVAS SUGERIDAS</p>
-          ${alternatives.map(a => `<p class="hint" style="margin:4px 0">• ${escape(a.start.slice(0, 16).replace('T', ' '))} — ${escape(a.assessment.label)}</p>`).join('')}
+      <!-- Tarjeta 1: Información general del evento -->
+      <article class="event-detail-card ${options.justSaved ? 'highlight-saved' : ''}">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          ${options.justSaved
+            ? `<span class="visit-badge badge-good">✓ Evento guardado en @${escape(user?.username || '')}</span>`
+            : `<span class="visit-badge badge-good">Evento en tu cuenta</span>`}
+          <span class="todo-tag ${escape(wx.tagClass)}">${wx.iconEmoji} ${escape(wx.tag)}</span>
         </div>
-      ` : ''}
+        <h1 style="margin:0;font-size:19px;color:#fff">${escape(ev.name)}</h1>
+        <p class="hint" style="margin:4px 0 0;text-transform:capitalize">${escape(fullDate)}</p>
 
-      <div class="actions" style="margin-top:12px">
-        <button type="button" id="btn-go-agenda-after-save" class="btn-cta-outline" style="flex:1">Ver en Agenda</button>
-        <a class="btn-text-teal" href="/api/events/${escape(ev.id)}/report.pdf" target="_blank" rel="noopener">PDF</a>
+        <div class="event-info-list">
+          <div class="event-info-cell">
+            <span>Horario</span>
+            <strong>${escape(startHour)}${endHour ? ' – ' + escape(endHour) : ''} hs</strong>
+          </div>
+          <div class="event-info-cell">
+            <span>Actividad</span>
+            <strong>${escape(actLabel)}</strong>
+          </div>
+          <div class="event-info-cell full">
+            <span>Destino y lugar</span>
+            <strong>${escape(ev.location_label || city.name)}${city.province ? ' · ' + escape(city.province) : ''}</strong>
+          </div>
+          <div class="event-info-cell full">
+            <span>Seguimiento de cambios</span>
+            <strong>${ev.notifications ? '🔔 Activo: te avisaremos si cambia el clima' : 'Desactivado'}</strong>
+          </div>
+        </div>
+      </article>
+
+      <!-- Tarjeta 2: Predicción y clima de ese día -->
+      <article class="event-detail-card">
+        <div class="pred-day-hero">
+          <div>
+            <span class="sub-eyebrow" style="margin:0 0 4px">CLIMA PREVISTO PARA TU EVENTO</span>
+            <h2 style="margin:0;font-size:16px;color:#fff">${escape(city.name)} · Máx ${wx.maxTemp}° / Mín ${wx.minTemp}°</h2>
+            <p class="hint" style="margin:2px 0 0">${escape(wx.confidence)}</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:34px;height:34px">${weatherSvg(wx.icon)}</div>
+            <div class="pred-day-temp-big">${wx.temp}°</div>
+          </div>
+        </div>
+
+        <div class="pred-slots-grid" aria-label="Franjas horarias del día">
+          <div class="pred-slot"><span>Mañana</span><strong>${wx.slots.morning}°</strong></div>
+          <div class="pred-slot"><span>Mediodía</span><strong>${wx.slots.noon}°</strong></div>
+          <div class="pred-slot"><span>Tarde</span><strong>${wx.slots.afternoon}°</strong></div>
+          <div class="pred-slot"><span>Noche</span><strong>${wx.slots.night}°</strong></div>
+        </div>
+
+        <div class="pred-result-grid">
+          <div class="pred-metric-card"><span>Temperatura</span><strong>${wx.temp} °C</strong></div>
+          <div class="pred-metric-card"><span>Prob. Lluvia</span><strong>${wx.rainProb} %</strong></div>
+          <div class="pred-metric-card"><span>Viento</span><strong>${wx.windKmh} km/h</strong></div>
+          <div class="pred-metric-card"><span>Índice UV</span><strong>${wx.uv} (${wx.uv >= 8 ? 'Alto' : wx.uv >= 5 ? 'Moderado' : 'Bajo'})</strong></div>
+          <div class="pred-metric-card"><span>Luz solar</span><strong>${wx.lightStr}</strong></div>
+          <div class="pred-metric-card"><span>Nubosidad</span><strong>${wx.cloudPct} %</strong></div>
+        </div>
+
+        <div style="margin:10px 0">
+          <p class="sub-eyebrow" style="margin:0 0 6px">QUÉ LLEVAR</p>
+          <div class="wear-chips">${wearItems.slice(0, 4).map(c => `<span class="wear-chip">${escape(c)}</span>`).join('')}</div>
+        </div>
+
+        <div class="pred-recommendation-box">
+          <strong>Recomendación (${escape(statusBanner)}):</strong> ${escape(wx.recommendation)}
+        </div>
+
+        ${alternatives.length ? `
+          <div style="margin-top:10px">
+            <p class="sub-eyebrow" style="margin:6px 0">OTROS HORARIOS / DÍAS SUGERIDOS</p>
+            ${alternatives.map(a => `<p class="hint" style="margin:4px 0">• ${escape(a.start.slice(0, 16).replace('T', ' '))} — ${escape(a.assessment.label)}</p>`).join('')}
+          </div>
+        ` : ''}
+      </article>
+
+      <div class="actions">
+        <button type="button" id="ev-detail-edit" class="btn-cta-outline" style="flex:1">Editar evento</button>
+        <button type="button" id="ev-detail-pred" class="btn-cta-fill" style="flex:1">Ver más días</button>
       </div>
+      <button type="button" id="ev-detail-delete" class="btn-danger-outline w-full">Eliminar evento de mi cuenta</button>
     `;
-    $('btn-go-agenda-after-save').onclick = () => panel('calendar');
+
+    panel('event-detail');
+    $('drawer-title').textContent = ev.name;
+
+    $('ev-detail-back').onclick = () => panel(backPanel);
+    $('ev-detail-edit').onclick = () => {
+      loadEventIntoQuickForm(ev);
+      panel('add-event');
+    };
+    $('ev-detail-pred').onclick = async () => {
+      const days = await getCityForecastDays(ev.city_id);
+      const idx = days.findIndex(d => d.date === dateStr);
+      state.selectedPredictionDayIdx = idx >= 0 ? idx : 0;
+      panel('prediction');
+    };
+    $('ev-detail-delete').onclick = safe(async () => {
+      await api('/api/events/' + ev.id, { method: 'DELETE' });
+      await loadAccount();
+      panel('calendar');
+      notice('Evento eliminado de tu cuenta.');
+    });
   }
 
   $('quick-event-form').onsubmit = async e => {
@@ -1475,11 +1582,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const wx = await computeEventWeatherSummary(savedEv);
       await loadAccount();
-      showSavedEventPredictionCard(savedEv, wx, evalResult);
-      updateTime(dateStr, { center: true });
       $('qe-edit-id').value = '';
       $('qe-reset-form-btn').hidden = true;
       $('qe-panel-heading').textContent = 'Agregar evento';
+      $('quick-event-form').reset();
+      $('qe-notify').checked = true;
+      await openEventDetail(savedEv, evalResult, { wx, justSaved: true, backPanel: 'calendar' });
       notice('Evento guardado en tu cuenta con predicción.');
     } catch (error) {
       errBox.textContent = error.message;
@@ -1620,9 +1728,17 @@ document.addEventListener('DOMContentLoaded', async () => {
           <strong>${escape(ev.name)}</strong>
           <span class="todo-tag tag-ideal">${escape(ev.start.slice(0, 10))}</span>
         </div>
-        <p class="hint" style="margin:4px 0 0">${escape(ev.start.slice(11, 16))} hs · ${escape(ev.location_label || ev.city_id)}</p>
+        <p class="hint" style="margin:4px 0 8px">${escape(ev.start.slice(11, 16))} hs · ${escape(ev.location_label || ev.city_id)}</p>
+        <button type="button" class="btn-text-teal" data-saved-view-ev="${escape(ev.id)}">Ver evento</button>
       </article>
     `).join('') || '<p class="hint">No tenés eventos guardados todavía.</p>';
+
+    $('saved-events-summary').querySelectorAll('[data-saved-view-ev]').forEach(btn => {
+      btn.onclick = safe(async () => {
+        const ev = activeEvs.find(x => x.id === btn.dataset.savedViewEv);
+        if (ev) await openEventDetail(ev, null, { backPanel: 'saved' });
+      });
+    });
   }
 
   function renderEventsListInAccount() {
@@ -1635,17 +1751,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         <div class="agenda-card-top">
           <div>
             <h3 class="agenda-card-title">${escape(e.name)}</h3>
-            <p class="agenda-card-meta">${escape(e.start.slice(0, 16).replace('T', ' '))} · ${escape(e.location_label || e.city_id)} · ${escape(e.status)}</p>
+            <p class="agenda-card-meta">${escape(e.start.slice(0, 10))} · ${escape(e.start.slice(11, 16))} hs · ${escape(e.location_label || e.city_id)}</p>
           </div>
         </div>
         <div class="actions" style="margin-top:6px">
+          <button type="button" class="btn-text-teal" data-acc-view="${escape(e.id)}">Ver evento</button>
           <button type="button" class="btn-text-teal" data-acc-edit="${escape(e.id)}">Editar</button>
-          <a class="btn-text-teal" href="/api/events/${escape(e.id)}/report.pdf" target="_blank" rel="noopener">PDF</a>
           <button type="button" class="btn-danger-outline" data-acc-del="${escape(e.id)}">Eliminar</button>
         </div>
       </article>
     `).join('') || '<p class="hint">Sin eventos guardados en tu cuenta todavía.</p>';
 
+    $('events-list').querySelectorAll('[data-acc-view]').forEach(btn => {
+      btn.onclick = safe(async () => {
+        const ev = events.find(x => x.id === btn.dataset.accView);
+        if (ev) await openEventDetail(ev, null, { backPanel: 'events' });
+      });
+    });
     $('events-list').querySelectorAll('[data-acc-edit]').forEach(btn => {
       btn.onclick = () => {
         const ev = events.find(x => x.id === btn.dataset.accEdit);
