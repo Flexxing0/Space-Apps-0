@@ -360,10 +360,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function tools(open) {
     $('tools').hidden = !open;
+    if ($('tools-backdrop')) $('tools-backdrop').hidden = !open;
     $('toggle-tools').setAttribute('aria-expanded', String(open));
   }
   $('toggle-tools').onclick = () => tools($('tools').hidden);
   $('close-tools').onclick = () => tools(false);
+  if ($('tools-backdrop')) $('tools-backdrop').onclick = () => tools(false);
 
   $('close-destination-card').onclick = () => {
     $('destination-card').hidden = true;
@@ -1786,9 +1788,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!choices.some(r => r.variable === previous) && variableNames[previous]) choices.push({ variable: previous, name: variableNames[previous] });
     }
     choices = choices.filter((r, i, a) => a.findIndex(x => x.variable === r.variable) === i);
-    $('variable').innerHTML = choices.map(r => `<option value="${escape(r.variable)}">${escape(variableNames[r.variable] || r.name || r.variable)}</option>`).join('');
     state.variable = choices.some(r => r.variable === previous) ? previous : choices[0]?.variable;
-    $('variable').value = state.variable || '';
+    if ($('variable')) {
+      $('variable').innerHTML = choices.map(r => `<option value="${escape(r.variable)}">${escape(variableNames[r.variable] || r.name || r.variable)}</option>`).join('');
+      $('variable').value = state.variable || '';
+    }
   }
 
   function updateAxis() {
@@ -1950,7 +1954,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('zoom-in').onclick = () => { view = Time.zoom(view, state.date, 0.5); updateAxis(); };
   $('zoom-out').onclick = () => { view = Time.zoom(view, state.date, 2); updateAxis(); };
   $('present').onclick = () => { stop(); state.mode = 'date'; $('mode').value = 'date'; state.scale = 'daily'; $('scale').value = 'daily'; updateTime(Time.iso(Date.now()), { center: true }); };
-  $('city').onchange = () => selectCity($('city').value);
+  if ($('city')) $('city').onchange = () => selectCity($('city').value);
 
   // Buscador de ciudades
   function renderSearchDropdown(queryText) {
@@ -1988,8 +1992,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   $('source').onchange = () => { state.provider = $('source').value; variables(); scheduleLoad(0); };
-  $('variable').onchange = () => { state.variable = $('variable').value; queryContext(); scheduleLoad(0); };
-  $('mode').onchange = () => { state.mode = $('mode').value; safe(load)(); panel('data'); };
+  if ($('variable')) $('variable').onchange = () => { state.variable = $('variable').value; queryContext(); scheduleLoad(0); };
+  $('mode').onchange = () => { state.mode = $('mode').value; safe(load)(); panel('data'); tools(false); };
 
   // Calendario mensual
   function calendar() {
@@ -2122,7 +2126,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       api('/api/science/variables'),
       api('/api/workspace/incidents')
     ]);
-    $('city').innerHTML = cities.map(city => `<option value="${city.id}">${escape(city.name)}</option>`).join('');
+    if ($('city')) $('city').innerHTML = cities.map(city => `<option value="${city.id}">${escape(city.name)}</option>`).join('');
     $('city-suggestions').innerHTML = cities.map(city => `<option value="${escape(city.name)}">${escape(city.province)}</option>`).join('');
     if (!cities.some(city => city.id === state.city_id)) state.city_id = cities[0].id;
     const initialPanel = state.panel;

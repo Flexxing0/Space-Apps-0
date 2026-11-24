@@ -115,36 +115,43 @@
     </div>
   </aside>
 
-  <!-- Panel de herramientas científicas existente (oculto por defecto) -->
+  <!-- Panel de herramientas científicas centrado (oculto por defecto) -->
+  <div id="tools-backdrop" class="tools-backdrop" hidden></div>
   <aside id="tools" class="tools" aria-label="Herramientas ambientales" hidden>
-    <div class="drawer-heading"><h2>Herramientas científicas</h2><button id="close-tools" type="button" aria-label="Cerrar herramientas">×</button></div>
-    <p class="eyebrow">TERRITORIO Y DATOS</p>
-    <label>Ubicación<select id="city"></select></label>
-    <label>Fuente<select id="source">
-      <option value="power">Automático · POWER / meteorología</option>
-      <option value="gldas">GLDAS 2.1 · mensual</option>
-      <option value="gpm">GPM IMERG · mensual</option>
-      <option value="modis">MODIS · 16 días</option>
-      <option value="forecast">Pronóstico operativo · horario</option>
-      <option value="era5">ERA5 · horario</option>
-      <option value="power-daily">NASA POWER · diario</option>
-    </select></label>
-    <label>Variable<select id="variable"></select></label>
-    <div id="territory-controls"></div>
-    <p class="hint">El mapa muestra puntos de grilla consultados. Seleccionar una región no equivale a medir toda su superficie.</p>
-    <button id="draw" type="button">Dibujar selección</button>
-    <button id="clear-draw" type="button">Limpiar selección</button>
-    <label class="check"><input type="checkbox" id="incident-layer" checked>Acontecimientos documentados</label>
-    <label>Modo<select id="mode">
-      <option value="date">Fecha individual</option>
-      <option value="range">Rango temporal</option>
-      <option value="compare">Comparación territorial</option>
-      <option value="anomaly">Anomalía mensual</option>
-      <option value="periods">Comparación temporal</option>
-      <option value="trend">Tendencias</option>
-    </select></label>
-    <a id="advanced" class="button" href="/explorer">Abrir análisis avanzado ↗</a>
-    <p class="hint">Coordenadas libres y recorridos aún requieren límites oficiales y capas verificadas.</p>
+    <div class="drawer-heading">
+      <h2>Herramientas científicas</h2>
+      <button id="close-tools" type="button" aria-label="Cerrar herramientas">×</button>
+    </div>
+    <p class="eyebrow">FUENTE Y MODO DE ANÁLISIS</p>
+    <label>Fuente de datos
+      <select id="source">
+        <option value="power">Automático · POWER / meteorología</option>
+        <option value="gldas">GLDAS 2.1 · mensual</option>
+        <option value="gpm">GPM IMERG · mensual</option>
+        <option value="modis">MODIS · 16 días</option>
+        <option value="forecast">Pronóstico operativo · horario</option>
+        <option value="era5">ERA5 · horario</option>
+        <option value="power-daily">NASA POWER · diario</option>
+      </select>
+    </label>
+    <label>Modo de análisis
+      <select id="mode">
+        <option value="date">Fecha individual</option>
+        <option value="range">Rango temporal</option>
+        <option value="compare">Comparación territorial</option>
+        <option value="anomaly">Anomalía mensual</option>
+        <option value="periods">Comparación temporal</option>
+        <option value="trend">Tendencias</option>
+      </select>
+    </label>
+    <label class="toggle-check">
+      <input type="checkbox" id="incident-layer" checked>
+      <span>Mostrar acontecimientos históricos documentados</span>
+    </label>
+    <p class="hint">El mapa muestra puntos de grilla consultados del catálogo argentino verificado con GeoRef.</p>
+    <div class="tools-footer-actions">
+      <a id="advanced" class="btn-cta-fill w-full" href="/explorer">Abrir análisis avanzado ↗</a>
+    </div>
   </aside>
 
   <!-- Escenario del Mapa Real de Argentina -->
