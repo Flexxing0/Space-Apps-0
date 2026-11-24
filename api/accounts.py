@@ -50,8 +50,8 @@ def authenticate(action):
     if action not in {'login','register'}:raise ServiceError('invalid_request','Acción desconocida.')
     payload=body();name=payload.get('username');password=payload.get('password')
     allowed={'username','password','email','email_alerts_enabled'} if action=='register' else {'username','password'}
-    if not {'username','password'}<=set(payload) or set(payload)-allowed or not isinstance(name,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{3,60}',name) or not isinstance(password,str) or not 12<=len(password)<=200:
-        raise ServiceError('invalid_request','Usuario de 3–60 caracteres y contraseña de 12–200 caracteres.')
+    if not {'username','password'}<=set(payload) or set(payload)-allowed or not isinstance(name,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{3,60}',name) or not isinstance(password,str) or not 6<=len(password)<=200:
+        raise ServiceError('invalid_request','Usuario de 3–60 caracteres y contraseña de 6–200 caracteres.')
     clean_email='';email_enabled=False
     if action=='register' and 'email' in payload:
         from services.events import mailer
