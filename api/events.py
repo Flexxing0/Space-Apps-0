@@ -92,49 +92,134 @@ def _ensure_prefs_table(db):
 @events_api.get('/account/preferences')
 @protect
 def get_account_preferences():
+    from services.events import mailer
     with store().connect() as db:
         _ensure_prefs_table(db)
         row=db.execute('SELECT body, updated_at FROM user_workspace_prefs WHERE user_id=?',(session['user_id'],)).fetchone()
     if not row:
-        return success({'saved_cities':[],'trip':None,'updated_at':None})
+        return success({'saved_cities':[],'trip':None,'email':'','email_alerts_enabled':False,'smtp_configured':mailer.is_configured(),'updated_at':None})
     data=json.loads(row['body'])
-    return success({'saved_cities':data.get('saved_cities',[]),'trip':data.get('trip'),'updated_at':row['updated_at']})
+    return success({
+        'saved_cities':data.get('saved_cities',[]),
+        'trip':data.get('trip'),
+        'email':data.get('email',''),
+        'email_alerts_enabled':bool(data.get('email_alerts_enabled',False)),
+        'smtp_configured':mailer.is_configured(),
+        'updated_at':row['updated_at'],
+    })
 
 
 @events_api.put('/account/preferences')
 @protect
 def put_account_preferences():
+    from services.events import mailer
     from services.storage.persistence import encode
     from services.workspace.workspace import iso_date
     payload=body()
-    if set(payload)-{'saved_cities','trip'}:
+    if set(payload)-{'saved_cities','trip','email','email_alerts_enabled'}:
         raise ServiceError('invalid_request','Campos de preferencias no admitidos.')
+    with store().connect() as db:
+        _ensure_prefs_table(db)
+        existing_row=db.execute('SELECT body FROM user_workspace_prefs WHERE user_id=?',(session['user_id'],)).fetchone()
+    existing=json.loads(existing_row['body']) if existing_row else {}
     data_svc=current_app.extensions['earthlens_service']
     valid_ids={c['id'] for c in data_svc.list_cities()}
-    raw_cities=payload.get('saved_cities',[])
-    if not isinstance(raw_cities,list) or len(raw_cities)>50 or any(not isinstance(x,str) or x not in valid_ids for x in raw_cities):
-        raise ServiceError('invalid_request','Lista de ciudades guardadas inválida.')
-    dedup_cities=list(dict.fromkeys(raw_cities))
-    trip=payload.get('trip')
-    clean_trip=None
-    if trip is not None:
-        if not isinstance(trip,dict) or set(trip)-{'city_id','start_date','duration_days'}:
-            raise ServiceError('invalid_request','Configuración de viaje inválida.')
-        cid=trip.get('city_id')
-        if not isinstance(cid,str) or cid not in valid_ids:
-            raise ServiceError('invalid_request','Ciudad de viaje inválida.')
-        start_str=iso_date(trip.get('start_date')).isoformat()
-        dur=trip.get('duration_days',5)
-        if type(dur) is not int or not 1<=dur<=14:
-            raise ServiceError('invalid_request','Duración de viaje entre 1 y 14 días.')
-        clean_trip={'city_id':cid,'start_date':start_str,'duration_days':dur}
+
+    if 'saved_cities' in payload:
+        raw_cities=payload['saved_cities']
+        if not isinstance(raw_cities,list) or len(raw_cities)>50 or any(not isinstance(x,str) or x not in valid_ids for x in raw_cities):
+            raise ServiceError('invalid_request','Lista de ciudades guardadas inválida.')
+        dedup_cities=list(dict.fromkeys(raw_cities))
+    else:
+        dedup_cities=existing.get('saved_cities',[])
+
+    if 'trip' in payload:
+        trip=payload['trip']
+        clean_trip=None
+        if trip is not None:
+            if not isinstance(trip,dict) or set(trip)-{'city_id','start_date','duration_days'}:
+                raise ServiceError('invalid_request','Configuración de viaje inválida.')
+            cid=trip.get('city_id')
+            if not isinstance(cid,str) or cid not in valid_ids:
+                raise ServiceError('invalid_request','Ciudad de viaje inválida.')
+            start_str=iso_date(trip.get('start_date')).isoformat()
+            dur=trip.get('duration_days',5)
+            if type(dur) is not int or not 1<=dur<=14:
+                raise ServiceError('invalid_request','Duración de viaje entre 1 y 14 días.')
+            clean_trip={'city_id':cid,'start_date':start_str,'duration_days':dur}
+    else:
+        clean_trip=existing.get('trip')
+
+    if 'email' in payload:
+        raw_email=payload['email']
+        if not isinstance(raw_email,str):
+            raise ServiceError('invalid_request','Correo inválido.')
+        clean_email=raw_email.strip()
+        if clean_email and not mailer.valid_email(clean_email):
+            raise ServiceError('invalid_request','Ingresá un correo electrónico válido (ej. nombre@correo.com).')
+    else:
+        clean_email=existing.get('email','')
+
+    if 'email_alerts_enabled' in payload:
+        enabled=payload['email_alerts_enabled']
+        if type(enabled) is not bool:
+            raise ServiceError('invalid_request','Valor inválido para consentimiento de avisos por correo.')
+        if enabled and not clean_email:
+            raise ServiceError('invalid_request','Ingresá tu correo electrónico para activar los avisos por mail.')
+    else:
+        enabled=bool(existing.get('email_alerts_enabled',False)) and bool(clean_email)
+
     now=utc_now()
-    record={'saved_cities':dedup_cities,'trip':clean_trip}
+    record={'saved_cities':dedup_cities,'trip':clean_trip,'email':clean_email,'email_alerts_enabled':enabled}
     with store().connect() as db:
         _ensure_prefs_table(db)
         db.execute('INSERT OR REPLACE INTO user_workspace_prefs(user_id,body,updated_at) VALUES(?,?,?)',
             (session['user_id'],encode(record),now))
-    return success({**record,'updated_at':now})
+    return success({**record,'smtp_configured':mailer.is_configured(),'updated_at':now})
+
+
+@events_api.patch('/account/profile')
+@protect
+def update_account_profile():
+    import re
+    payload=body()
+    if set(payload)!={'username'}:
+        raise ServiceError('invalid_request','Solo se permite actualizar el nombre de usuario.')
+    raw_name=payload.get('username')
+    if not isinstance(raw_name,str) or not re.fullmatch(r'[A-Za-z0-9_.-]{3,60}',raw_name.strip()):
+        raise ServiceError('invalid_request','Nombre de usuario de 3–60 caracteres (letras, números, punto o guion, sin espacios).')
+    clean_name=raw_name.strip().casefold()
+    uid=session['user_id']
+    with store().connect() as db:
+        conflict=db.execute('SELECT id FROM users WHERE username=? AND id!=?',(clean_name,uid)).fetchone()
+        if conflict:
+            raise ServiceError('account_conflict','Ese nombre de usuario ya está en uso por otra cuenta.')
+        db.execute('UPDATE users SET username=? WHERE id=?',(clean_name,uid))
+    return success({'user':{'id':uid,'username':clean_name}})
+
+
+@events_api.post('/account/test-email')
+@protect
+def test_account_email():
+    from api.accounts import user as current_user
+    from services.events import mailer
+    if not mailer.is_configured():
+        raise ServiceError('provider_auth_required','El envío de correos SMTP todavía no está configurado en el servidor (.env).')
+    with store().connect() as db:
+        _ensure_prefs_table(db)
+        row=db.execute('SELECT body FROM user_workspace_prefs WHERE user_id=?',(session['user_id'],)).fetchone()
+    prefs=json.loads(row['body']) if row else {}
+    to_email=prefs.get('email','')
+    if not mailer.valid_email(to_email):
+        raise ServiceError('invalid_request','Primero guardá un correo electrónico válido en tu cuenta.')
+    if not prefs.get('email_alerts_enabled'):
+        raise ServiceError('invalid_request','Activá el tilde de avisos por correo antes de enviar una prueba.')
+    u=current_user()
+    try:
+        mailer.send_test_email(to_email,u['username'] if u else 'viajero')
+    except Exception:
+        raise ServiceError('provider_unavailable','No se pudo enviar el correo. Verificá tu configuración SMTP en .env y la Contraseña de aplicación de Gmail.') from None
+    return success({'sent':True,'to':to_email})
 
 
 @events_api.post('/events/<event_id>/evaluate')
@@ -142,6 +227,7 @@ def put_account_preferences():
 def evaluate_saved_event(event_id):
     import hashlib
     import uuid
+    from services.events import mailer
     from services.storage.persistence import encode
     from services.events.planning import decision_key
     event=service().get(session['user_id'],event_id)
@@ -156,7 +242,15 @@ def evaluate_saved_event(event_id):
         'decision':decision_key(assessment)
     }).encode()).hexdigest()
     now=utc_now()
+    user_prefs={}
+    should_email=False
+    title='Seguimiento activado · '+event['name']
+    msg=f"{event['name']} ({event['start'][:10]}): {assessment['label']}."
     with store().connect() as db:
+        _ensure_prefs_table(db)
+        pref_row=db.execute('SELECT body FROM user_workspace_prefs WHERE user_id=?',(session['user_id'],)).fetchone()
+        if pref_row:
+            user_prefs=json.loads(pref_row['body'])
         old=db.execute('SELECT id FROM forecast_snapshots WHERE event_id=? AND fingerprint=?',(event['id'],fingerprint)).fetchone()
         if not old:
             snap_id=uuid.uuid4().hex
@@ -164,12 +258,23 @@ def evaluate_saved_event(event_id):
             db.execute('INSERT INTO assessments VALUES(?,?,?,?,?,?)',(uuid.uuid4().hex,event['id'],snap_id,event['revision'],now,encode(assessment)))
             if event.get('notifications'):
                 dedupe=hashlib.sha256(encode([event['id'],event['revision'],fingerprint]).encode()).hexdigest()
-                title='Seguimiento activado · '+event['name']
-                msg=f"{event['name']} ({event['start'][:10]}): {assessment['label']}."
-                db.execute('INSERT OR IGNORE INTO notifications VALUES(?,?,?,?,?,?,?,?,?)',
+                inserted=db.execute('INSERT OR IGNORE INTO notifications VALUES(?,?,?,?,?,?,?,?,?)',
                     (uuid.uuid4().hex,session['user_id'],event['id'],dedupe,now,None,title,msg,
                      encode({'previous_status':None,'assessment':assessment,'alternatives':result['alternatives'],
                              'event':{'id':event['id'],'name':event['name'],'city_id':event['city_id'],'start':event['start'],'end':event['end']},
                              'changes':[],'recommendation':'El monitoreo avisará si cambian las condiciones previstas para tu evento.',
-                             'potential_consequences':'Evaluación inicial guardada en tu cuenta.'})))
-    return success({'assessment':assessment,'alternatives':result['alternatives']})
+                             'potential_consequences':'Evaluación inicial guardada en tu cuenta.'}))).rowcount
+                should_email=inserted==1
+    email_sent=False
+    if should_email and user_prefs.get('email_alerts_enabled') and mailer.valid_email(user_prefs.get('email','')) and mailer.is_configured():
+        try:
+            city_info=current_app.extensions['earthlens_service'].get_city(event['city_id'])
+            mailer.send_event_alert(
+                user_prefs['email'],event,title,msg,
+                recommendation='Seguimiento activo. Si cambia el pronóstico de lluvia, viento o temperatura, recibirás otro correo.',
+                city_name=city_info.get('name','')
+            )
+            email_sent=True
+        except Exception:
+            email_sent=False
+    return success({'assessment':assessment,'alternatives':result['alternatives'],'email_sent':email_sent})

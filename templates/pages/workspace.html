@@ -115,13 +115,30 @@
     </div>
   </aside>
 
-  <!-- Panel de configuración de predicción centrado (oculto por defecto) -->
+  <!-- Panel de configuración centrado (oculto por defecto) -->
   <div id="tools-backdrop" class="tools-backdrop" hidden></div>
-  <aside id="tools" class="tools" aria-label="Configuración de fuentes y predicción" hidden>
+  <aside id="tools" class="tools" aria-label="Configuración de cuenta y predicción" hidden>
     <div class="drawer-heading">
       <h2>Configuración</h2>
       <button id="close-tools" type="button" aria-label="Cerrar configuración">×</button>
     </div>
+
+    <p class="eyebrow">TU CUENTA</p>
+    <div id="settings-login-hint" class="auth-prompt-card">
+      <p>Iniciá sesión para editar tu nombre de usuario y gestionar tus avisos por correo.</p>
+      <button id="btn-login-from-settings" type="button" class="btn-cta-fill btn-sm">Iniciar sesión / Crear cuenta</button>
+    </div>
+    <form id="settings-username-form" class="inline-auth-form" hidden>
+      <label>Nombre de usuario
+        <input id="settings-username" name="username" type="text" required minlength="3" maxlength="60" pattern="[A-Za-z0-9_.-]{3,60}" autocomplete="username" placeholder="Ej. martin_viajes">
+        <small class="field-help">3 a 60 caracteres (letras, números, punto o guion, sin espacios).</small>
+      </label>
+      <p id="settings-username-feedback" class="auth-feedback" hidden></p>
+      <button id="btn-save-username" type="submit" class="btn-cta-fill btn-sm w-full">Guardar nombre de usuario</button>
+    </form>
+
+    <hr style="border:0;border-top:1px solid var(--border-subtle);margin:16px 0">
+
     <p class="eyebrow">FUENTE DE PREDICCIÓN Y CLIMA</p>
     <label>Fuente de datos
       <select id="source">
@@ -279,6 +296,16 @@
             <input id="inline-username" name="username" type="text" required minlength="3" maxlength="60" pattern="[A-Za-z0-9_.-]{3,60}" autocomplete="username" placeholder="Ej. martin_viajes">
             <small class="field-help">3 a 60 caracteres (letras, números, guion o punto, sin espacios).</small>
           </label>
+          <div id="inline-email-wrap" hidden>
+            <label>Correo electrónico
+              <input id="inline-email" name="email" type="email" maxlength="254" autocomplete="email" placeholder="Ej. tucorreo@gmail.com">
+              <small class="field-help">Lo usamos para avisarte si cambia el clima de tus eventos.</small>
+            </label>
+            <label class="toggle-check">
+              <input id="inline-email-opt" name="email_alerts_enabled" type="checkbox" checked>
+              <span>Recibir avisos por correo cuando cambie el clima</span>
+            </label>
+          </div>
           <label>Contraseña
             <div class="pass-input-wrap">
               <input id="inline-password" name="password" type="password" required minlength="12" maxlength="200" autocomplete="current-password" placeholder="Mínimo 12 caracteres">
@@ -367,23 +394,35 @@
       <h1>Mi cuenta</h1>
       <div id="auth" class="auth-gate-box">
         <h3>Accedé a tu cuenta EarthLens</h3>
-        <p class="hint">Guardá tus eventos, predicciones, alertas meteorológicas y destinos favoritos de forma privada.</p>
+        <p class="hint">Guardá tus eventos, predicciones, alertas por correo y destinos favoritos de forma privada.</p>
         <form id="auth-form" class="inline-auth-form">
-          <label>Usuario
+          <div id="main-auth-tabs" class="auth-mode-tabs" role="tablist">
+            <button type="button" class="auth-tab active" data-main-auth-mode="login">Iniciar sesión</button>
+            <button type="button" class="auth-tab" data-main-auth-mode="register">Crear cuenta</button>
+          </div>
+          <label>Nombre de usuario
             <input id="main-auth-user" name="username" required minlength="3" maxlength="60" pattern="[A-Za-z0-9_.-]{3,60}" autocomplete="username" placeholder="Ej. martin_viajes">
-            <small class="field-help">3 a 60 letras, números, puntos o guiones.</small>
+            <small class="field-help">3 a 60 letras, números, puntos o guiones (editable luego en Configuración).</small>
           </label>
+          <div id="main-auth-email-wrap" hidden>
+            <label>Correo electrónico
+              <input id="main-auth-email" name="email" type="email" maxlength="254" autocomplete="email" placeholder="Ej. tucorreo@gmail.com">
+              <small class="field-help">Te enviaremos avisos de tus eventos a este correo.</small>
+            </label>
+            <label class="toggle-check">
+              <input id="main-auth-email-opt" name="email_alerts_enabled" type="checkbox" checked>
+              <span>Recibir avisos por correo si cambia el clima</span>
+            </label>
+          </div>
           <label>Contraseña
             <div class="pass-input-wrap">
               <input id="main-auth-pass" name="password" type="password" required minlength="12" maxlength="200" autocomplete="current-password" placeholder="Mínimo 12 caracteres">
               <button type="button" class="pass-toggle-btn" data-toggle-pass="main-auth-pass" aria-label="Mostrar u ocultar contraseña">Ver</button>
             </div>
+            <small class="field-help">Al menos 12 caracteres por seguridad.</small>
           </label>
           <p id="main-auth-error" class="auth-feedback" hidden></p>
-          <div class="auth-submit-row">
-            <button name="login" value="login" type="submit" class="btn-cta-fill">Ingresar</button>
-            <button name="register" value="register" type="submit" class="btn-cta-outline">Crear cuenta</button>
-          </div>
+          <button id="main-auth-submit" name="login" value="login" type="submit" class="btn-cta-fill w-full">Ingresar</button>
         </form>
       </div>
 
@@ -400,6 +439,25 @@
             <button type="button" class="btn-cta-fill btn-sm" data-panel="add-event">+ Nuevo evento</button>
             <button id="logout" type="button" class="btn-cta-outline btn-sm">Cerrar sesión</button>
           </div>
+        </div>
+
+        <div class="account-summary-card">
+          <h3 style="margin:0 0 6px;font-size:15px;color:#fff">✉ Avisos por correo electrónico</h3>
+          <p id="smtp-status-hint" class="hint" style="margin:0 0 10px">Cargá tu correo para recibir alertas automáticas cuando cambie el clima de tus eventos.</p>
+          <form id="email-prefs-form" class="inline-auth-form">
+            <label>Tu correo electrónico
+              <input id="account-email" name="email" type="email" maxlength="254" placeholder="Ej. tucorreo@gmail.com" autocomplete="email">
+            </label>
+            <label class="toggle-check">
+              <input id="account-email-enabled" name="email_alerts_enabled" type="checkbox">
+              <span>Recibir avisos por mail si cambia la predicción de mis eventos</span>
+            </label>
+            <p id="email-feedback" class="auth-feedback" hidden></p>
+            <div class="auth-submit-row">
+              <button id="btn-save-email" type="submit" class="btn-cta-fill btn-sm">Guardar correo</button>
+              <button id="btn-test-email" type="button" class="btn-cta-outline btn-sm">Enviar prueba</button>
+            </div>
+          </form>
         </div>
 
         <h2 class="sub-eyebrow">MIS EVENTOS GUARDADOS</h2>

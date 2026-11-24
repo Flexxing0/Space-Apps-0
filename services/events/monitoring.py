@@ -67,6 +67,24 @@ class MonitoringService:
                                     'changes':changes,'recommendation':'Revisar los criterios y avisos oficiales; las alternativas requieren confirmación del usuario.',
                                     'potential_consequences':'Cambio de compatibilidad meteorológica. Sin evidencia espacial suficiente para afirmar impactos urbanos.'}))).rowcount
                             summary['notifications']+=count
+                            if count==1:
+                                from services.events import mailer
+                                if mailer.is_configured():
+                                    try:
+                                        pref_row=db.execute("SELECT body FROM user_workspace_prefs WHERE user_id=?",(row['user_id'],)).fetchone()
+                                    except Exception:
+                                        pref_row=None
+                                    if pref_row:
+                                        prefs=json.loads(pref_row['body'])
+                                        if prefs.get('email_alerts_enabled') and mailer.valid_email(prefs.get('email','')):
+                                            try:
+                                                mailer.send_event_alert(
+                                                    prefs['email'],event,title,message,
+                                                    changes=changes,
+                                                    recommendation='Revisá el pronóstico actualizado en EarthLens para ajustar tu actividad si hace falta.'
+                                                )
+                                            except Exception:
+                                                pass
                     summary['updated']+=1
                     if assessment['status']=='insufficient':summary['failed']+=1
                 except Exception as error:

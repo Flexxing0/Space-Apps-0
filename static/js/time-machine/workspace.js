@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     tripDurationDays: 5,
     selectedPredictionDayIdx: 0,
     inlineAuthMode: 'login',
+    mainAuthMode: 'login',
     postAuthPanel: null
   };
 
@@ -30,6 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let incidents = [], allIncidents = [], drawing = false, vertices = [], polygon = null, view = Time.view(state.date, state.scale);
   let weatherForecastCache = new Map(), cityProfileCache = new Map(), cityPhotoCache = new Map();
   let savedCities = new Set();
+  let accountEmail = '', emailAlertsEnabled = false, smtpConfigured = false;
 
   // Artículos exactos de Wikipedia (ES y EN) para las 25 ciudades argentinas del catálogo
   const CITY_WIKI_TITLES = {
@@ -406,17 +408,45 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Pestañas Iniciar sesión / Crear cuenta dentro de Agregar evento
-  document.querySelectorAll('.auth-tab').forEach(tab => {
+  document.querySelectorAll('[data-auth-mode]').forEach(tab => {
     tab.onclick = () => {
       state.inlineAuthMode = tab.dataset.authMode;
-      document.querySelectorAll('.auth-tab').forEach(t => t.classList.toggle('active', t === tab));
-      $('inline-auth-submit').textContent = state.inlineAuthMode === 'register'
+      const isReg = state.inlineAuthMode === 'register';
+      document.querySelectorAll('[data-auth-mode]').forEach(t => t.classList.toggle('active', t === tab));
+      if ($('inline-email-wrap')) $('inline-email-wrap').hidden = !isReg;
+      if ($('inline-email')) $('inline-email').required = isReg;
+      $('inline-auth-submit').textContent = isReg
         ? 'Crear cuenta y continuar al evento'
         : 'Ingresar y continuar al evento';
-      $('inline-password').setAttribute('autocomplete', state.inlineAuthMode === 'register' ? 'new-password' : 'current-password');
+      $('inline-password').setAttribute('autocomplete', isReg ? 'new-password' : 'current-password');
       $('inline-auth-error').hidden = true;
     };
   });
+
+  // Pestañas Iniciar sesión / Crear cuenta en Mi cuenta
+  document.querySelectorAll('[data-main-auth-mode]').forEach(tab => {
+    tab.onclick = () => {
+      state.mainAuthMode = tab.dataset.mainAuthMode;
+      const isReg = state.mainAuthMode === 'register';
+      document.querySelectorAll('[data-main-auth-mode]').forEach(t => t.classList.toggle('active', t === tab));
+      if ($('main-auth-email-wrap')) $('main-auth-email-wrap').hidden = !isReg;
+      if ($('main-auth-email')) $('main-auth-email').required = isReg;
+      if ($('main-auth-submit')) {
+        $('main-auth-submit').name = isReg ? 'register' : 'login';
+        $('main-auth-submit').value = isReg ? 'register' : 'login';
+        $('main-auth-submit').textContent = isReg ? 'Crear cuenta' : 'Ingresar';
+      }
+      if ($('main-auth-pass')) $('main-auth-pass').setAttribute('autocomplete', isReg ? 'new-password' : 'current-password');
+      $('main-auth-error').hidden = true;
+    };
+  });
+
+  if ($('btn-login-from-settings')) {
+    $('btn-login-from-settings').onclick = () => {
+      tools(false);
+      panel('events');
+    };
+  }
 
   // ==================== CUENTA, SESIÓN Y PERSISTENCIA EN SQLITE ====================
   function updateAuthUI() {
@@ -428,11 +458,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('account').hidden = !loggedIn;
     $('agenda-auth-banner').hidden = loggedIn;
     $('saved-auth-banner').hidden = loggedIn;
+    if ($('settings-login-hint')) $('settings-login-hint').hidden = loggedIn;
+    if ($('settings-username-form')) $('settings-username-form').hidden = !loggedIn;
     if (loggedIn) {
       $('account-name').textContent = '@' + user.username;
       $('account-big-avatar').textContent = user.username.charAt(0).toUpperCase();
       $('account-stats-text').textContent = `${events.filter(e => e.status === 'active').length} evento(s) · ${savedCities.size} destino(s) guardado(s)`;
       $('qe-active-user').textContent = '@' + user.username;
+      if ($('settings-username') && document.activeElement !== $('settings-username')) {
+        $('settings-username').value = user.username;
+      }
     }
     syncAddEventAuthGate();
     updateSaveCityButton();
@@ -477,7 +512,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         events = [];
         notificationRows = [];
         savedCities = new Set();
+        accountEmail = '';
+        emailAlertsEnabled = false;
         updateAuthUI();
+        syncEmailPrefsUI();
         renderEventsListInAccount();
         if (state.panel === 'calendar') renderAgendaList();
         if (state.panel === 'notifications') renderNotificationsPanel();
@@ -489,17 +527,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       const [evList, notifList, prefs] = await Promise.all([
         api('/api/events'),
         api('/api/notifications'),
-        api('/api/account/preferences').catch(() => ({ saved_cities: [], trip: null }))
+        api('/api/account/preferences').catch(() => ({ saved_cities: [], trip: null, email: '', email_alerts_enabled: false, smtp_configured: false }))
       ]);
       events = evList || [];
       notificationRows = notifList || [];
       savedCities = new Set(prefs?.saved_cities || []);
+      accountEmail = prefs?.email || '';
+      emailAlertsEnabled = Boolean(prefs?.email_alerts_enabled);
+      smtpConfigured = Boolean(prefs?.smtp_configured);
       if (prefs?.trip?.start_date) {
         state.tripStartDate = prefs.trip.start_date;
         state.tripDurationDays = prefs.trip.duration_days || 5;
       }
 
       updateAuthUI();
+      syncEmailPrefsUI();
       renderEventsListInAccount();
       renderEvents();
       renderTripBar();
@@ -511,17 +553,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  async function performAuth(action, username, password, errorEl) {
+  async function performAuth(action, username, password, errorEl, email = '', emailAlerts = true) {
     errorEl.hidden = true;
     errorEl.classList.remove('ok');
     if (!csrf) {
       const sess = await api('/api/session');
       csrf = sess.csrf_token;
     }
+    const payload = { username: username.trim(), password };
+    if (action === 'register' && email && email.trim()) {
+      payload.email = email.trim();
+      payload.email_alerts_enabled = Boolean(emailAlerts);
+    }
     try {
       const me = await api('/api/session/' + action, {
         method: 'POST',
-        body: JSON.stringify({ username: username.trim(), password })
+        body: JSON.stringify(payload)
       });
       csrf = me.csrf_token;
       user = me.user;
@@ -539,11 +586,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault();
     const btn = $('inline-auth-submit');
     btn.disabled = true;
+    const isReg = state.inlineAuthMode === 'register';
     const ok = await performAuth(
       state.inlineAuthMode,
       $('inline-username').value,
       $('inline-password').value,
-      $('inline-auth-error')
+      $('inline-auth-error'),
+      isReg ? ($('inline-email')?.value || '') : '',
+      isReg ? Boolean($('inline-email-opt')?.checked) : false
     );
     btn.disabled = false;
     if (ok) {
@@ -558,8 +608,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('auth-form').onsubmit = async e => {
     e.preventDefault();
     const f = $('auth-form').elements;
-    const action = e.submitter?.name === 'register' ? 'register' : 'login';
-    const ok = await performAuth(action, f.username.value, f.password.value, $('main-auth-error'));
+    const action = state.mainAuthMode === 'register' || e.submitter?.name === 'register' ? 'register' : 'login';
+    const isReg = action === 'register';
+    const ok = await performAuth(
+      action,
+      f.username.value,
+      f.password.value,
+      $('main-auth-error'),
+      isReg ? ($('main-auth-email')?.value || '') : '',
+      isReg ? Boolean($('main-auth-email-opt')?.checked) : false
+    );
     if (ok) {
       f.password.value = '';
       $('drawer-title').textContent = `Mi cuenta · @${user.username}`;
@@ -571,6 +629,115 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
   };
+
+  // Editar nombre de usuario desde Configuración (⚙)
+  if ($('settings-username-form')) {
+    $('settings-username-form').onsubmit = async e => {
+      e.preventDefault();
+      if (!user) return;
+      const fb = $('settings-username-feedback');
+      const btn = $('btn-save-username');
+      fb.hidden = true;
+      fb.classList.remove('ok');
+      btn.disabled = true;
+      try {
+        const res = await api('/api/account/profile', {
+          method: 'PATCH',
+          body: JSON.stringify({ username: $('settings-username').value.trim() })
+        });
+        user = res.user;
+        updateAuthUI();
+        if (state.panel === 'events') $('drawer-title').textContent = `Mi cuenta · @${user.username}`;
+        fb.textContent = `✓ Nombre de usuario actualizado a @${user.username}.`;
+        fb.classList.add('ok');
+        fb.hidden = false;
+      } catch (error) {
+        fb.textContent = error.message;
+        fb.hidden = false;
+      } finally {
+        btn.disabled = false;
+      }
+    };
+  }
+
+  function syncEmailPrefsUI() {
+    if (!$('account-email')) return;
+    $('account-email').value = accountEmail;
+    $('account-email-enabled').checked = emailAlertsEnabled;
+    if ($('smtp-status-hint')) {
+      $('smtp-status-hint').textContent = smtpConfigured
+        ? 'Servidor de correo activo. Recibirás avisos automáticos si cambia el clima de tus eventos.'
+        : 'Guardá tu correo aquí. Para enviar mails reales, cargá tu cuenta Gmail de avisos en el archivo .env local y reiniciá Docker.';
+    }
+  }
+
+  function showEmailFeedback(text, ok = false) {
+    const el = $('email-feedback');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle('ok', ok);
+    el.hidden = false;
+  }
+
+  if ($('email-prefs-form')) {
+    $('email-prefs-form').onsubmit = async e => {
+      e.preventDefault();
+      if (!user) return;
+      const btn = $('btn-save-email');
+      btn.disabled = true;
+      try {
+        const res = await api('/api/account/preferences', {
+          method: 'PUT',
+          body: JSON.stringify({
+            email: $('account-email').value.trim(),
+            email_alerts_enabled: $('account-email-enabled').checked
+          })
+        });
+        accountEmail = res.email || '';
+        emailAlertsEnabled = Boolean(res.email_alerts_enabled);
+        smtpConfigured = Boolean(res.smtp_configured);
+        syncEmailPrefsUI();
+        showEmailFeedback(
+          emailAlertsEnabled
+            ? `✓ Correo ${accountEmail} guardado con avisos activados.`
+            : '✓ Preferencias de correo guardadas.',
+          true
+        );
+      } catch (error) {
+        showEmailFeedback(error.message, false);
+      } finally {
+        btn.disabled = false;
+      }
+    };
+  }
+
+  if ($('btn-test-email')) {
+    $('btn-test-email').onclick = async () => {
+      if (!user) return;
+      const btn = $('btn-test-email');
+      const prev = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Enviando…';
+      try {
+        const saved = await api('/api/account/preferences', {
+          method: 'PUT',
+          body: JSON.stringify({
+            email: $('account-email').value.trim(),
+            email_alerts_enabled: $('account-email-enabled').checked
+          })
+        });
+        accountEmail = saved.email || '';
+        emailAlertsEnabled = Boolean(saved.email_alerts_enabled);
+        const sent = await api('/api/account/test-email', { method: 'POST', body: '{}' });
+        showEmailFeedback(`✓ Correo de prueba enviado a ${sent.to}. Revisá tu bandeja (o Spam).`, true);
+      } catch (error) {
+        showEmailFeedback(error.message, false);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prev;
+      }
+    };
+  }
 
   $('logout').onclick = safe(async () => {
     await api('/api/session/logout', { method: 'POST', body: '{}' });
@@ -1444,7 +1611,13 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
           <div class="event-info-cell full">
             <span>Seguimiento de cambios</span>
-            <strong>${ev.notifications ? '🔔 Activo: te avisaremos si cambia el clima' : 'Desactivado'}</strong>
+            <strong>${ev.notifications
+              ? (evalResult?.email_sent
+                  ? '🔔 Activo · ✉ Confirmación enviada a tu correo'
+                  : (emailAlertsEnabled && accountEmail
+                      ? `🔔 Activo · ✉ Avisos por mail a ${escape(accountEmail)}`
+                      : '🔔 Activo en campanita (agregá tu mail en Mi cuenta para recibir correos)'))
+              : 'Desactivado'}</strong>
           </div>
         </div>
       </article>
