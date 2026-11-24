@@ -7,7 +7,8 @@
     </a>
     <label class="city-search">
       <span class="sr-only">Buscar ciudad argentina</span>
-      <input id="search" type="search" list="city-suggestions" placeholder="Comodoro Rivadavia" value="Comodoro Rivadavia" autocomplete="off">
+      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="search" type="search" list="city-suggestions" placeholder="Buscar ciudad…" value="Comodoro Rivadavia" autocomplete="off">
       <datalist id="city-suggestions"></datalist>
       <div id="search-dropdown" class="search-dropdown" hidden></div>
     </label>
@@ -23,19 +24,23 @@
     </label>
   </div>
   <div class="top-actions">
-    <button id="btn-saved" class="top-link-btn" data-panel="saved" title="Destinos y eventos guardados">Guardados</button>
-    <button id="btn-calendar" class="top-icon-btn" data-panel="calendar" aria-label="Abrir calendario" title="Agenda y calendario">
+    <button id="btn-saved" type="button" class="top-link-btn" data-panel="saved" aria-label="Guardados" title="Destinos y eventos guardados">
+      <svg class="saved-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+      <span class="top-link-text">Guardados</span>
+    </button>
+    <button id="btn-calendar" type="button" class="top-icon-btn" data-panel="calendar" aria-label="Abrir calendario" title="Agenda y calendario">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 2v5M17 2v5M3 10h18"/><rect x="7" y="13" width="3" height="3" rx="0.5"/></svg>
     </button>
-    <button id="btn-notifications" class="top-icon-btn has-badge" data-panel="notifications" aria-label="Abrir notificaciones" title="Notificaciones">
+    <button id="btn-notifications" type="button" class="top-icon-btn has-badge" data-panel="notifications" aria-label="Abrir notificaciones" title="Notificaciones">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2.5H4L6 16Z"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>
-      <span id="badge" class="notif-badge">2</span>
+      <span id="badge" class="notif-badge"></span>
     </button>
-    <button id="btn-avatar" class="avatar-btn" data-panel="events" aria-label="Abrir perfil y eventos" title="Mi espacio">
-      <span id="avatar-initial">M</span>
+    <button id="btn-avatar" type="button" class="avatar-btn" data-panel="events" aria-label="Cuenta y eventos" title="Mi cuenta y eventos">
+      <span id="avatar-initial" class="avatar-circle">👤</span>
+      <span id="avatar-username" class="avatar-username">Ingresar</span>
     </button>
-    <button id="present" class="sr-only" title="Volver al momento actual">Ahora</button>
-    <button id="toggle-tools" class="top-icon-btn tools-trigger" aria-label="Abrir herramientas científicas" aria-controls="tools" aria-expanded="false" title="Herramientas científicas">⚙</button>
+    <button id="present" type="button" class="sr-only" title="Volver al momento actual">Ahora</button>
+    <button id="toggle-tools" type="button" class="top-icon-btn tools-trigger" aria-label="Abrir herramientas científicas" aria-controls="tools" aria-expanded="false" title="Herramientas científicas">⚙</button>
     <details class="more-menu">
       <summary aria-label="Más herramientas" title="Más herramientas">•••</summary>
       <nav aria-label="Navegación principal">

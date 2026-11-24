@@ -1,9 +1,16 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EarthLens — Comprendé el pasado. Anticipá el futuro.</title>
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>EarthLens — Comprendé el pasado. Anticipá el futuro.</title>
 <link rel="icon" href="data:,"><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="{{ url_for('static', filename='css/pages/workspace.css') }}"><link rel="stylesheet" href="{{ url_for('static', filename='css/components/time_machine_shell.css') }}"></head>
 <body data-panel="{{ workspace_panel|default('') }}" data-city="{{ workspace_city|default('') or '' }}">
 {% include "components/_workspace_header.html" %}
 <main class="workspace">
-  <!-- Tarjeta izquierda principal del destino (cerrable con X, se abre al clickear ciudad) -->
+  <!-- Accesos rápidos flotantes en móvil/tablet para reabrir tarjetas sobre el mapa -->
+  <div class="mobile-quick-pills" aria-label="Accesos rápidos del mapa">
+    <button id="mob-open-dest" type="button" class="mob-pill" hidden>📍 Destino</button>
+    <button id="mob-open-layers" type="button" class="mob-pill">🗺 Capas</button>
+    <button id="mob-open-season" type="button" class="mob-pill">📊 Clima típico</button>
+  </div>
+
+  <!-- Tarjeta izquierda principal del destino (cerrable con X, compactable en celular, se abre al clickear ciudad) -->
   <aside id="destination-card" class="destination-card" aria-label="Información del destino seleccionado">
     <div class="dest-banner" id="dest-banner">
       <svg class="dest-illustration" viewBox="0 0 360 135" preserveAspectRatio="none" aria-hidden="true">
@@ -26,83 +33,91 @@
       </svg>
       <img id="dest-photo-img" class="dest-photo-img" alt="Foto del destino" hidden>
       <span id="dest-photo-label" class="dest-photo-badge">Foto del destino</span>
-      <button id="btn-save-city" type="button" class="dest-fav-btn" title="Guardar ciudad en favoritos" aria-label="Guardar ciudad">♡</button>
+      <button id="btn-save-city" type="button" class="dest-fav-btn" title="Guardar ciudad en tu cuenta" aria-label="Guardar ciudad">♡</button>
+      <button id="toggle-compact-dest" type="button" class="dest-compact-btn" title="Minimizar o expandir tarjeta" aria-label="Minimizar o expandir tarjeta">▾</button>
       <button id="close-destination-card" type="button" class="dest-close-btn" aria-label="Cerrar tarjeta de ciudad" title="Cerrar">×</button>
     </div>
 
     <div class="dest-content">
-      <div class="dest-header">
-        <h1 id="dest-name">Comodoro Rivadavia</h1>
-        <p id="dest-region" class="dest-region">Chubut · Patagonia</p>
+      <div class="dest-header-row">
+        <div class="dest-header">
+          <h1 id="dest-name">Comodoro Rivadavia</h1>
+          <p id="dest-region" class="dest-region">Chubut · Patagonia</p>
+        </div>
+        <button id="compact-expand-trigger" type="button" class="compact-temp-pill" hidden>
+          <span id="compact-temp-val">20°</span> · Ver más ▴
+        </button>
       </div>
 
-      <div class="dest-weather-hero">
-        <div class="dest-temp-display">
-          <span id="dest-temp-value">20</span><span class="dest-temp-deg">°</span>
+      <div id="dest-collapsible-body" class="dest-collapsible-body">
+        <div class="dest-weather-hero">
+          <div class="dest-temp-display">
+            <span id="dest-temp-value">20</span><span class="dest-temp-deg">°</span>
+          </div>
+          <div class="dest-status-box">
+            <span id="dest-visit-badge" class="visit-badge badge-good">Buen momento para visitar</span>
+            <p id="dest-weather-summary" class="dest-weather-summary">Sol y poca lluvia. Lo único a tener en cuenta es el viento.</p>
+          </div>
         </div>
-        <div class="dest-status-box">
-          <span id="dest-visit-badge" class="visit-badge badge-good">Buen momento para visitar</span>
-          <p id="dest-weather-summary" class="dest-weather-summary">Sol y poca lluvia. Lo único a tener en cuenta es el viento.</p>
-        </div>
-      </div>
 
-      <div class="dest-stats-grid" aria-label="Indicadores del día">
-        <div class="dest-stat-item">
-          <span class="stat-label">Viento</span>
-          <strong id="dest-stat-wind" class="stat-val">32 km/h</strong>
+        <div class="dest-stats-grid" aria-label="Indicadores del día">
+          <div class="dest-stat-item">
+            <span class="stat-label">Viento</span>
+            <strong id="dest-stat-wind" class="stat-val">32 km/h</strong>
+          </div>
+          <div class="dest-stat-item">
+            <span class="stat-label">Lluvia</span>
+            <strong id="dest-stat-rain" class="stat-val">5 %</strong>
+          </div>
+          <div class="dest-stat-item">
+            <span class="stat-label">UV</span>
+            <strong id="dest-stat-uv" class="stat-val">8</strong>
+          </div>
+          <div class="dest-stat-item">
+            <span class="stat-label">Luz</span>
+            <strong id="dest-stat-light" class="stat-val">14 h 30</strong>
+          </div>
         </div>
-        <div class="dest-stat-item">
-          <span class="stat-label">Lluvia</span>
-          <strong id="dest-stat-rain" class="stat-val">5 %</strong>
-        </div>
-        <div class="dest-stat-item">
-          <span class="stat-label">UV</span>
-          <strong id="dest-stat-uv" class="stat-val">8</strong>
-        </div>
-        <div class="dest-stat-item">
-          <span class="stat-label">Luz</span>
-          <strong id="dest-stat-light" class="stat-val">14 h 30</strong>
-        </div>
-      </div>
 
-      <div class="dest-block">
-        <h2 class="dest-block-title">QUÉ LLEVAR</h2>
-        <div id="dest-what-to-wear" class="wear-chips">
-          <span class="wear-chip">Cortaviento</span>
-          <span class="wear-chip">Anteojos de sol</span>
-          <span class="wear-chip">Protector solar</span>
-          <span class="wear-chip">Gorra</span>
+        <div class="dest-block">
+          <h2 class="dest-block-title">QUÉ LLEVAR</h2>
+          <div id="dest-what-to-wear" class="wear-chips">
+            <span class="wear-chip">Cortaviento</span>
+            <span class="wear-chip">Anteojos de sol</span>
+            <span class="wear-chip">Protector solar</span>
+            <span class="wear-chip">Gorra</span>
+          </div>
         </div>
-      </div>
 
-      <div class="dest-block">
-        <h2 class="dest-block-title">PARA HACER HOY</h2>
-        <ul id="dest-todo-list" class="todo-list">
-          <li class="todo-item">
-            <span class="todo-name">Mirador Cerro Chenque</span>
-            <span class="todo-tag tag-ideal">Ideal</span>
-          </li>
-          <li class="todo-item">
-            <span class="todo-name">Costanera y playa</span>
-            <span class="todo-tag tag-windy">Ventoso</span>
-          </li>
-          <li class="todo-item">
-            <span class="todo-name">Museo del Petróleo</span>
-            <span class="todo-tag tag-indoor">Techado</span>
-          </li>
-        </ul>
-      </div>
+        <div class="dest-block">
+          <h2 class="dest-block-title">PARA HACER HOY</h2>
+          <ul id="dest-todo-list" class="todo-list">
+            <li class="todo-item">
+              <span class="todo-name">Mirador Cerro Chenque</span>
+              <span class="todo-tag tag-ideal">Ideal</span>
+            </li>
+            <li class="todo-item">
+              <span class="todo-name">Costanera y playa</span>
+              <span class="todo-tag tag-windy">Ventoso</span>
+            </li>
+            <li class="todo-item">
+              <span class="todo-name">Museo del Petróleo</span>
+              <span class="todo-tag tag-indoor">Techado</span>
+            </li>
+          </ul>
+        </div>
 
-      <div class="dest-cta-row">
-        <button id="btn-add-event-card" type="button" class="btn-cta-fill">Agregar evento</button>
-        <button id="btn-prediction-card" type="button" class="btn-cta-outline">Predicción</button>
+        <div class="dest-cta-row">
+          <button id="btn-add-event-card" type="button" class="btn-cta-fill">Agregar evento</button>
+          <button id="btn-prediction-card" type="button" class="btn-cta-outline">Predicción</button>
+        </div>
       </div>
     </div>
   </aside>
 
   <!-- Panel de herramientas científicas existente (oculto por defecto) -->
   <aside id="tools" class="tools" aria-label="Herramientas ambientales" hidden>
-    <div class="drawer-heading"><h2>Herramientas científicas</h2><button id="close-tools" aria-label="Cerrar herramientas">×</button></div>
+    <div class="drawer-heading"><h2>Herramientas científicas</h2><button id="close-tools" type="button" aria-label="Cerrar herramientas">×</button></div>
     <p class="eyebrow">TERRITORIO Y DATOS</p>
     <label>Ubicación<select id="city"></select></label>
     <label>Fuente<select id="source">
@@ -117,8 +132,8 @@
     <label>Variable<select id="variable"></select></label>
     <div id="territory-controls"></div>
     <p class="hint">El mapa muestra puntos de grilla consultados. Seleccionar una región no equivale a medir toda su superficie.</p>
-    <button id="draw">Dibujar selección</button>
-    <button id="clear-draw">Limpiar selección</button>
+    <button id="draw" type="button">Dibujar selección</button>
+    <button id="clear-draw" type="button">Limpiar selección</button>
     <label class="check"><input type="checkbox" id="incident-layer" checked>Acontecimientos documentados</label>
     <label>Modo<select id="mode">
       <option value="date">Fecha individual</option>
@@ -140,16 +155,16 @@
       <span id="map-value">Consultando datos reales...</span>
       <span id="selection-label">25 ciudades verificadas con GeoRef</span>
       <div class="caption-actions">
-        <button data-panel="data">Datos y gráfico</button>
-        <button data-panel="profile">Perfil de ciudad</button>
-        <button data-panel="impact">Impactos</button>
+        <button type="button" data-panel="data">Datos y gráfico</button>
+        <button type="button" data-panel="profile">Perfil de ciudad</button>
+        <button type="button" data-panel="impact">Impactos</button>
       </div>
       <div id="notice" role="status" aria-live="polite">Preparando datos...</div>
     </div>
   </section>
 
   <!-- Tarjetas flotantes de la derecha: Mejor época para ir + Capas del mapa -->
-  <div class="right-floating-stack">
+  <div id="right-floating-stack" class="right-floating-stack">
     <aside id="best-season-card" class="right-widget-card" aria-label="Mejor época para ir">
       <div class="widget-head">
         <strong>Mejor época para ir</strong>
@@ -195,27 +210,32 @@
     </div>
   </div>
 
-  <!-- Inspector / Paneles interactivos (Calendario, Notificaciones, Agregar evento, Predicción, Guardados, Datos) -->
+  <!-- Inspector / Paneles interactivos (Calendario, Notificaciones, Agregar evento, Predicción, Guardados, Cuenta, Ciencia) -->
   <aside class="inspector" id="inspector" aria-label="Información contextual" hidden>
     <div class="drawer-heading">
       <h2 id="drawer-title">Información</h2>
-      <button id="close-inspector" aria-label="Cerrar panel contextual">×</button>
+      <button id="close-inspector" type="button" aria-label="Cerrar panel contextual">×</button>
     </div>
     <div class="tabs" role="tablist">
-      <button data-panel="calendar">Agenda</button>
-      <button data-panel="prediction">Predicción</button>
-      <button data-panel="add-event">Agregar evento</button>
-      <button data-panel="notifications">Avisos</button>
-      <button data-panel="saved">Guardados</button>
-      <button data-panel="data">Ciencia</button>
-      <button data-panel="profile">Perfil</button>
+      <button type="button" data-panel="calendar">Agenda</button>
+      <button type="button" data-panel="prediction">Predicción</button>
+      <button type="button" data-panel="add-event">Agregar evento</button>
+      <button type="button" data-panel="notifications">Avisos</button>
+      <button type="button" data-panel="saved">Guardados</button>
+      <button type="button" data-panel="events">Cuenta</button>
+      <button type="button" data-panel="data">Ciencia</button>
+      <button type="button" data-panel="profile">Perfil</button>
     </div>
 
     <!-- 1. INTERACCIÓN CALENDARIO / AGENDA -->
     <section id="panel-calendar" class="panel" hidden>
       <div class="panel-intro">
         <h1>Agenda de tu viaje</h1>
-        <p class="hint">Tus eventos agendados con su pronóstico y etiqueta climática actualizada.</p>
+        <p class="hint">Tus eventos guardados en tu cuenta con su pronóstico y etiqueta climática actualizada.</p>
+      </div>
+      <div id="agenda-auth-banner" class="auth-prompt-card" hidden>
+        <p><strong>Iniciá sesión para sincronizar tu agenda</strong> y guardar tus eventos de forma permanente en tu cuenta.</p>
+        <button id="btn-login-from-agenda" type="button" class="btn-cta-fill btn-sm">Iniciar sesión / Crear cuenta</button>
       </div>
       <div id="agenda-events-container" class="agenda-events-list"></div>
       <div class="calendar-block">
@@ -243,50 +263,88 @@
       <div class="notif-panel-head">
         <div>
           <h1>Notificaciones</h1>
-          <p class="hint">Alertas de cambios en la predicción de tus eventos y destinos.</p>
+          <p class="hint">Alertas de cambios en la predicción de tus eventos guardados.</p>
         </div>
         <button id="mark-all-read" type="button" class="btn-text-teal">Marcar leídas</button>
       </div>
       <div id="notifications-list" class="notifications-list"></div>
     </section>
 
-    <!-- 3. INTERACCIÓN AGREGAR EVENTO ("Guardar y predecir") -->
+    <!-- 3. INTERACCIÓN AGREGAR EVENTO (Requiere cuenta -> guarda todo en SQLite) -->
     <section id="panel-add-event" class="panel" hidden>
       <div class="panel-intro">
-        <h1>Agregar evento</h1>
-        <p class="hint">Completá los datos de tu actividad para guardarla en la agenda y calcular la predicción de ese día.</p>
+        <h1 id="qe-panel-heading">Agregar evento</h1>
+        <p class="hint">Tu evento y su seguimiento meteorológico se guardan directamente en tu cuenta.</p>
       </div>
-      <form id="quick-event-form" class="quick-event-form">
-        <label>Nombre del evento
-          <input id="qe-name" name="name" type="text" required maxlength="120" placeholder="Ej. Subida al Mirador Cerro Chenque">
-        </label>
-        <div class="form-row-2">
-          <label>Fecha
-            <input id="qe-date" name="date" type="date" required>
+
+      <!-- Gate de inicio de sesión cuando el usuario aún no ingresó -->
+      <div id="qe-auth-gate" class="auth-gate-box" hidden>
+        <div class="auth-gate-badge">🔒 Cuenta requerida para guardar eventos</div>
+        <h3>Ingresá o creá tu cuenta</h3>
+        <p class="hint">Iniciá sesión para que tus eventos, fechas de viaje, ciudades favoritas y alertas queden guardados en tu cuenta en cualquier dispositivo.</p>
+        <form id="inline-auth-form" class="inline-auth-form">
+          <div class="auth-mode-tabs" role="tablist">
+            <button type="button" class="auth-tab active" data-auth-mode="login">Iniciar sesión</button>
+            <button type="button" class="auth-tab" data-auth-mode="register">Crear cuenta</button>
+          </div>
+          <label>Nombre de usuario
+            <input id="inline-username" name="username" type="text" required minlength="3" maxlength="60" pattern="[A-Za-z0-9_.-]{3,60}" autocomplete="username" placeholder="Ej. martin_viajes">
+            <small class="field-help">3 a 60 caracteres (letras, números, guion o punto, sin espacios).</small>
           </label>
-          <label>Hora
-            <input id="qe-time" name="time" type="time" required value="10:30">
+          <label>Contraseña
+            <div class="pass-input-wrap">
+              <input id="inline-password" name="password" type="password" required minlength="12" maxlength="200" autocomplete="current-password" placeholder="Mínimo 12 caracteres">
+              <button type="button" class="pass-toggle-btn" data-toggle-pass="inline-password" aria-label="Mostrar u ocultar contraseña">Ver</button>
+            </div>
+            <small class="field-help">Al menos 12 caracteres por seguridad.</small>
           </label>
+          <p id="inline-auth-error" class="auth-feedback" hidden></p>
+          <button id="inline-auth-submit" type="submit" class="btn-cta-fill w-full">Ingresar y continuar al evento</button>
+        </form>
+      </div>
+
+      <!-- Formulario de evento activo cuando el usuario está logueado -->
+      <div id="qe-form-container" hidden>
+        <div class="account-active-chip">
+          <span>Sesión activa: <strong id="qe-active-user">@usuario</strong></span>
+          <button id="qe-reset-form-btn" type="button" class="btn-link-subtle" hidden>Nuevo evento</button>
         </div>
-        <label>Lugar
-          <input id="qe-place" name="place" type="text" required maxlength="160" placeholder="Ej. Mirador Cerro Chenque, Comodoro Rivadavia">
-        </label>
-        <label>Tipo de actividad
-          <select id="qe-type" name="activity_type">
-            <option value="outdoor">Aire libre / Mirador</option>
-            <option value="coastal">Costanera y playa</option>
-            <option value="hiking">Trekking / Senderismo</option>
-            <option value="urban">Paseo urbano</option>
-            <option value="sport">Deporte al aire libre</option>
-            <option value="indoor">Museo / Bajo techo</option>
-          </select>
-        </label>
-        <label class="toggle-check">
-          <input id="qe-notify" name="notify_change" type="checkbox" checked>
-          <span>Avisarme si cambia la predicción para este día</span>
-        </label>
-        <button id="btn-save-and-predict" type="submit" class="btn-cta-fill w-full">Guardar y predecir</button>
-      </form>
+        <form id="quick-event-form" class="quick-event-form">
+          <input id="qe-edit-id" type="hidden" value="">
+          <label>Nombre del evento
+            <input id="qe-name" name="name" type="text" required maxlength="120" placeholder="Ej. Subida al Mirador Cerro Chenque">
+          </label>
+          <div class="form-row-2">
+            <label>Fecha
+              <input id="qe-date" name="date" type="date" required>
+            </label>
+            <label>Hora
+              <input id="qe-time" name="time" type="time" required value="10:30">
+            </label>
+          </div>
+          <label>Lugar (en <span id="qe-city-label">Comodoro Rivadavia</span>)
+            <input id="qe-place" name="place" type="text" required maxlength="160" placeholder="Ej. Mirador Cerro Chenque, Comodoro Rivadavia">
+          </label>
+          <label>Tipo de actividad
+            <select id="qe-type" name="activity_type">
+              <option value="outdoor">Aire libre / Mirador</option>
+              <option value="coastal">Costanera y playa</option>
+              <option value="hiking">Trekking / Senderismo</option>
+              <option value="excursion">Excursión turística</option>
+              <option value="urban">Paseo urbano</option>
+              <option value="sport">Deporte al aire libre</option>
+              <option value="indoor">Museo / Bajo techo</option>
+            </select>
+          </label>
+          <label class="toggle-check">
+            <input id="qe-notify" name="notify_change" type="checkbox" checked>
+            <span>Avisarme si cambia la predicción para este día</span>
+          </label>
+          <p id="qe-error-msg" class="auth-feedback" hidden></p>
+          <button id="btn-save-and-predict" type="submit" class="btn-cta-fill w-full">Guardar y predecir</button>
+        </form>
+      </div>
+
       <div id="quick-event-result" class="quick-event-result" hidden></div>
     </section>
 
@@ -300,67 +358,69 @@
       <div id="prediction-day-card" class="prediction-day-card"></div>
     </section>
 
-    <!-- 5. PANEL GUARDADOS -->
+    <!-- 5. PANEL GUARDADOS (sincronizado con cuenta) -->
     <section id="panel-saved" class="panel" hidden>
       <div class="panel-intro">
         <h1>Guardados</h1>
-        <p class="hint">Ciudades favoritas y actividades guardadas para tu viaje.</p>
+        <p class="hint">Ciudades favoritas y actividades guardadas en tu cuenta.</p>
+      </div>
+      <div id="saved-auth-banner" class="auth-prompt-card" hidden>
+        <p>Iniciá sesión para que tus ciudades favoritas y tu viaje se guarden en tu cuenta.</p>
+        <button id="btn-login-from-saved" type="button" class="btn-cta-fill btn-sm">Iniciar sesión / Crear cuenta</button>
       </div>
       <h2 class="sub-eyebrow">DESTINOS GUARDADOS</h2>
       <div id="saved-cities-list" class="saved-list"></div>
-      <h2 class="sub-eyebrow">EVENTOS GUARDADOS</h2>
+      <h2 class="sub-eyebrow">EVENTOS DE TU CUENTA</h2>
       <div id="saved-events-summary" class="saved-list"></div>
     </section>
 
-    <!-- PANELES CIENTÍFICOS Y DE CUENTA EXISTENTES (preservados para tests y análisis avanzado) -->
-    <section id="panel-data" class="panel" hidden>
-      <div class="panel-heading">
-        <p class="eyebrow" id="data-kind">HISTÓRICO</p>
-        <h1 id="data-title">Explorar el territorio</h1>
-        <strong id="value" class="value">—</strong><span id="value-unit"></span>
-      </div>
-      <div class="chart-wrap"><canvas id="chart" aria-label="Serie temporal" role="img"></canvas></div>
-      <dl id="provenance"></dl>
-      <div id="comparison"></div>
-      <p id="limits" class="hint"></p>
-      <div class="actions">
-        <button id="export-json">JSON</button>
-        <button id="export-csv">CSV</button>
-        <button id="report">Informe PDF</button>
-        <button data-panel="events">Planificar actividad</button>
-      </div>
-      <h2 class="h3">Acontecimientos del catálogo</h2>
-      <div id="incidents"></div>
-      <p class="hint">Las tendencias y pruebas de significancia continúan en el Laboratorio; no se amplía la familia de Radar.</p>
-    </section>
-
-    <section id="panel-profile" class="panel" hidden>
-      <h1 id="profile-title">Perfil ambiental</h1>
-      <div id="profile-content"></div>
-    </section>
-
+    <!-- 6. PANEL DE CUENTA Y EVENTOS PRIVADOS -->
     <section id="panel-events" class="panel" hidden>
-      <h1>Mi espacio</h1>
-      <div class="actions" style="margin-bottom:12px">
-        <button type="button" class="btn-cta-fill" data-panel="add-event">+ Agregar evento rápido</button>
-      </div>
-      <div id="auth">
-        <p>Iniciá sesión para sincronizar eventos privados en la base de datos del servidor.</p>
-        <form id="auth-form">
-          <label>Usuario<input name="username" required minlength="3" maxlength="60" autocomplete="username"></label>
-          <label>Contraseña<input name="password" type="password" required minlength="12" autocomplete="current-password"></label>
-          <div class="actions"><button name="login" type="submit">Ingresar</button><button name="register" type="submit">Crear cuenta</button></div>
+      <h1>Mi cuenta</h1>
+      <div id="auth" class="auth-gate-box">
+        <h3>Accedé a tu cuenta EarthLens</h3>
+        <p class="hint">Guardá tus eventos, predicciones, alertas meteorológicas y destinos favoritos de forma privada.</p>
+        <form id="auth-form" class="inline-auth-form">
+          <label>Usuario
+            <input id="main-auth-user" name="username" required minlength="3" maxlength="60" pattern="[A-Za-z0-9_.-]{3,60}" autocomplete="username" placeholder="Ej. martin_viajes">
+            <small class="field-help">3 a 60 letras, números, puntos o guiones.</small>
+          </label>
+          <label>Contraseña
+            <div class="pass-input-wrap">
+              <input id="main-auth-pass" name="password" type="password" required minlength="12" maxlength="200" autocomplete="current-password" placeholder="Mínimo 12 caracteres">
+              <button type="button" class="pass-toggle-btn" data-toggle-pass="main-auth-pass" aria-label="Mostrar u ocultar contraseña">Ver</button>
+            </div>
+          </label>
+          <p id="main-auth-error" class="auth-feedback" hidden></p>
+          <div class="auth-submit-row">
+            <button name="login" value="login" type="submit" class="btn-cta-fill">Ingresar</button>
+            <button name="register" value="register" type="submit" class="btn-cta-outline">Crear cuenta</button>
+          </div>
         </form>
       </div>
+
       <div id="account" hidden>
-        <p id="account-name"></p>
-        <button id="logout">Cerrar sesión</button>
-        <h2>Eventos guardados</h2>
-        <div id="events-list"></div>
+        <div class="account-summary-card">
+          <div class="account-user-row">
+            <div class="account-big-avatar" id="account-big-avatar">M</div>
+            <div>
+              <strong id="account-name" class="account-username-title"></strong>
+              <p id="account-stats-text" class="hint" style="margin:2px 0 0">Sincronizado con base de datos</p>
+            </div>
+          </div>
+          <div class="actions" style="margin-top:12px">
+            <button type="button" class="btn-cta-fill btn-sm" data-panel="add-event">+ Nuevo evento</button>
+            <button id="logout" type="button" class="btn-cta-outline btn-sm">Cerrar sesión</button>
+          </div>
+        </div>
+
+        <h2 class="sub-eyebrow">MIS EVENTOS GUARDADOS</h2>
+        <div id="events-list" class="agenda-events-list"></div>
       </div>
+
       <div id="event-details" hidden></div>
-      <details id="event-editor">
-        <summary>Crear / editar evento con umbrales científicos</summary>
+      <details id="event-editor" style="margin-top:14px">
+        <summary>Editor avanzado con criterios meteorológicos</summary>
         <form id="event-form">
           <h2 id="event-form-title">Planificar actividad</h2>
           <input name="id" type="hidden">
@@ -409,6 +469,33 @@
         </form>
       </details>
       <div id="assessment"></div>
+    </section>
+
+    <!-- PANELES CIENTÍFICOS EXISTENTES -->
+    <section id="panel-data" class="panel" hidden>
+      <div class="panel-heading">
+        <p class="eyebrow" id="data-kind">HISTÓRICO</p>
+        <h1 id="data-title">Explorar el territorio</h1>
+        <strong id="value" class="value">—</strong><span id="value-unit"></span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart" aria-label="Serie temporal" role="img"></canvas></div>
+      <dl id="provenance"></dl>
+      <div id="comparison"></div>
+      <p id="limits" class="hint"></p>
+      <div class="actions">
+        <button id="export-json" type="button">JSON</button>
+        <button id="export-csv" type="button">CSV</button>
+        <button id="report" type="button">Informe PDF</button>
+        <button type="button" data-panel="add-event">Planificar actividad</button>
+      </div>
+      <h2 class="h3">Acontecimientos del catálogo</h2>
+      <div id="incidents"></div>
+      <p class="hint">Las tendencias y pruebas de significancia continúan en el Laboratorio; no se amplía la familia de Radar.</p>
+    </section>
+
+    <section id="panel-profile" class="panel" hidden>
+      <h1 id="profile-title">Perfil ambiental</h1>
+      <div id="profile-content"></div>
     </section>
 
     <section id="panel-impact" class="panel" hidden>

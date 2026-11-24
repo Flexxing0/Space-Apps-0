@@ -90,7 +90,7 @@ def create_app(config=None):
     def private_response_headers(response):
         from flask import request
         response.headers['X-Content-Type-Options']='nosniff'
-        if request.path.startswith(('/api/session','/api/events','/api/notifications')):
+        if request.path.startswith(('/api/session','/api/events','/api/notifications','/api/account')):
             response.headers['Cache-Control']='no-store'
             response.vary.add('Cookie')
         return response

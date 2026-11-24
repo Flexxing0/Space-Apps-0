@@ -3,11 +3,17 @@
     <div class="trip-info">
       <div class="trip-eyebrow-row">
         <span class="trip-eyebrow">TU VIAJE</span>
-        <button id="btn-trip-config" type="button" class="trip-config-btn" title="Configurar fechas de tu viaje">Cambiar fechas</button>
+        <button id="btn-trip-config" type="button" class="trip-config-btn" title="Configurar fechas de tu viaje">Fechas ✎</button>
       </div>
-      <strong id="trip-range-label" class="trip-range-label">28 nov – 2 dic</strong>
-      <span id="trip-meta-label" class="trip-meta-label">5 días · Comodoro</span>
+      <div class="trip-titles-wrap">
+        <strong id="trip-range-label" class="trip-range-label">28 nov – 2 dic</strong>
+        <span id="trip-meta-label" class="trip-meta-label">5 días · Comodoro</span>
+      </div>
       <div id="trip-popover" class="trip-popover" hidden>
+        <div class="trip-popover-head">
+          <strong>Fechas de tu viaje</strong>
+          <button id="close-trip-popover" type="button" class="widget-close" aria-label="Cerrar selector de fechas">×</button>
+        </div>
         <label>Inicio del viaje
           <input id="trip-start-input" type="date">
         </label>
@@ -15,7 +21,7 @@
           <input id="trip-days-input" type="number" min="1" max="9" value="5">
         </label>
         <div class="trip-popover-actions">
-          <button id="btn-apply-trip" type="button" class="btn-primary-teal btn-sm">Aplicar</button>
+          <button id="btn-apply-trip" type="button" class="btn-primary-teal btn-sm">Guardar rango</button>
           <button id="btn-toggle-scrubber" type="button" class="btn-outline-teal btn-sm">Línea temporal histórica</button>
         </div>
       </div>
@@ -26,9 +32,9 @@
   <div id="advanced-timeline" class="advanced-timeline" hidden>
     <div class="time-controls">
       <div class="transport">
-        <button id="step-back" aria-label="Retroceder un paso">◀</button>
-        <button id="play" aria-label="Reproducir evolución temporal">▶</button>
-        <button id="step-next" aria-label="Avanzar un paso">▶</button>
+        <button id="step-back" type="button" aria-label="Retroceder un paso">◀</button>
+        <button id="play" type="button" aria-label="Reproducir evolución temporal">▶</button>
+        <button id="step-next" type="button" aria-label="Avanzar un paso">▶</button>
         <select id="direction" aria-label="Dirección de reproducción">
           <option value="1">Hacia adelante</option>
           <option value="-1">Hacia atrás</option>
@@ -52,8 +58,8 @@
             <option value="yearly">Año</option>
           </select>
         </label>
-        <button id="zoom-out" aria-label="Alejar escala temporal">−</button>
-        <button id="zoom-in" aria-label="Acercar escala temporal">＋</button>
+        <button id="zoom-out" type="button" aria-label="Alejar escala temporal">−</button>
+        <button id="zoom-in" type="button" aria-label="Acercar escala temporal">＋</button>
         <label class="exact-date"><span class="sr-only">Fecha y hora UTC</span>
           <input id="date" type="datetime-local" step="3600" title="Fecha y hora UTC">
         </label>
@@ -62,7 +68,7 @@
           <div class="range-popover">
             <label>Desde<input id="start" type="date" value="2000-01-01"></label>
             <label>Hasta<input id="end" type="date" value="2024-12-31"></label>
-            <button id="apply-range">Analizar intervalo</button>
+            <button id="apply-range" type="button">Analizar intervalo</button>
             <p class="hint">El rango de análisis no limita el viaje temporal.</p>
           </div>
         </details>
