@@ -1590,10 +1590,51 @@ document.addEventListener('DOMContentLoaded', async () => {
         $('avatar-initial').textContent = user.username.charAt(0).toUpperCase();
         events = await api('/api/events');
         notificationRows = await api('/api/notifications');
+        $('events-list').innerHTML = events.length
+          ? events.map(ev => `<div class="agenda-item"><strong>${escape(ev.name)}</strong><span>${escape(ev.city_id)} ? ${escape((ev.start || '').slice(0, 16).replace('T', ' '))}</span></div>`).join('')
+          : '<p class="hint">Todav?a no ten?s eventos guardados.</p>';
+      } else {
+        events = [];
+        notificationRows = [];
+        $('avatar-initial').textContent = 'M';
+        $('events-list').innerHTML = '';
       }
     } catch (_) {}
     updateNotificationBadge();
   }
+
+  $('auth-form').onsubmit = async e => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const action = e.submitter?.name === 'register' ? 'register' : 'login';
+    try {
+      if (!csrf) await loadAccount();
+      const data = await api('/api/session/' + action, {
+        method: 'POST',
+        body: JSON.stringify({
+          username: form.username.value.trim(),
+          password: form.password.value
+        })
+      });
+      csrf = data.csrf_token;
+      form.password.value = '';
+      await loadAccount();
+      notice(action === 'register' ? 'Cuenta creada e iniciada.' : 'Sesi?n iniciada.');
+    } catch (error) {
+      notice(error.message, true);
+    }
+  };
+
+  $('logout').onclick = safe(async () => {
+    if (!csrf) await loadAccount();
+    await api('/api/session/logout', { method: 'POST' });
+    user = null;
+    csrf = null;
+    events = [];
+    notificationRows = [];
+    await loadAccount();
+    notice('Sesi?n cerrada.');
+  });
 
   async function impact() {
     const city = state.city_id, result = await api('/api/impact?city_id=' + city);
