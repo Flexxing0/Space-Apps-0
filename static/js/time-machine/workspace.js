@@ -1,8 +1,10 @@
-/* EarthLens: Interfaz integrada con Mapa de Argentina, Tarjeta de Destino, Tu Viaje y 4 Interacciones */
+/* EarthLens: Interfaz Responsive + Cuenta real en SQLite (Eventos, Preferencias, Notificaciones y Guardados) */
 'use strict';
 document.addEventListener('DOMContentLoaded', async () => {
   const $ = id => document.getElementById(id);
   const params = new URLSearchParams(location.search), Time = window.EarthLensTimeAxis;
+  const isMobile = () => window.matchMedia('(max-width: 768px)').matches;
+
   const state = {
     city_id: params.get('city_id') || document.body.dataset.city || 'comodoro-rivadavia',
     variable: params.get('variable') || 'T2M',
@@ -15,96 +17,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     panel: document.body.dataset.panel || null,
     selected: [],
     mapLayer: 'temperature',
-    tripStartOffset: 0,
+    tripStartDate: new Date().toISOString().slice(0, 10),
     tripDurationDays: 5,
-    selectedPredictionDayIdx: 0
+    selectedPredictionDayIdx: 0,
+    inlineAuthMode: 'login',
+    postAuthPanel: null
   };
 
   let cities = [], catalog = [], record = null, frame = null, comparisonRecords = [], chart = null, radial = null, versionChart = null;
   let activeHistoryId = null, activeEventId = null, controller = null, seq = 0, timer = null, loadTimer = null;
   let calendarDate = new Date(Time.parse(state.date)), user = null, csrf = null, events = [], notificationRows = [], notificationEventFilter = null;
   let incidents = [], allIncidents = [], drawing = false, vertices = [], polygon = null, view = Time.view(state.date, state.scale);
-  let weatherForecastCache = new Map(), cityProfileCache = new Map();
-  let savedCities = new Set(['comodoro-rivadavia', 'bariloche', 'mendoza']);
+  let weatherForecastCache = new Map(), cityProfileCache = new Map(), cityPhotoCache = new Map();
+  let savedCities = new Set();
 
-  // Eventos locales interactivos (sincronizados con la agenda y con opción de persistir en backend)
-  let localAgendaEvents = [
-    {
-      id: 'ev-chenque-1',
-      city_id: 'comodoro-rivadavia',
-      name: 'Mirador Cerro Chenque',
-      date: offsetIsoDate(0),
-      time: '11:00',
-      place: 'Cerro Chenque, Comodoro Rivadavia',
-      activity_type: 'outdoor',
-      notify_change: true,
-      temp: 21,
-      rainProb: 5,
-      windKmh: 28,
-      uv: 8,
-      tag: 'Ideal',
-      tagClass: 'tag-ideal',
-      icon: 'sun',
-      confidence: 'Alta (88%) · Pronóstico operativo Open-Meteo',
-      recommendation: 'Excelente visibilidad desde el mirador. Llevá cortaviento, anteojos de sol y protector solar FPS 30+.'
-    },
-    {
-      id: 'ev-costanera-2',
-      city_id: 'comodoro-rivadavia',
-      name: 'Paseo por Costanera y Playa',
-      date: offsetIsoDate(1),
-      time: '16:30',
-      place: 'Costanera Centro, Comodoro Rivadavia',
-      activity_type: 'coastal',
-      notify_change: true,
-      temp: 22,
-      rainProb: 10,
-      windKmh: 36,
-      uv: 7,
-      tag: 'Ventoso',
-      tagClass: 'tag-windy',
-      icon: 'wind',
-      confidence: 'Alta (85%) · Pronóstico operativo Open-Meteo',
-      recommendation: 'Tarde soleada pero con ráfagas costeras moderadas. Recomendado llevar rompeviento y gorra ajustada.'
-    }
-  ];
-
-  // Notificaciones iniciales para la campanita (2 no leídas como en la imagen)
-  let localNotifications = [
-    {
-      id: 'notif-1',
-      event_id: 'ev-costanera-2',
-      city_id: 'comodoro-rivadavia',
-      title: 'Cambio de viento en Costanera y Playa',
-      message: 'El pronóstico para mañana a las 16:30 subió de 24 km/h a 36 km/h con ráfagas costeras.',
-      change_detail: 'Viento: 24 km/h → 36 km/h · Temperatura estable en 22°',
-      recommendation: 'Llevar cortaviento o adelantar la actividad a la mañana (11:00 h).',
-      created_at: 'Hace 15 min',
-      unread: true
-    },
-    {
-      id: 'notif-2',
-      event_id: 'ev-chenque-1',
-      city_id: 'comodoro-rivadavia',
-      title: 'Condiciones ideales confirmadas · Cerro Chenque',
-      message: 'Se mantiene 5% de probabilidad de lluvia y cielo despejado (21°C, UV 8) para tu visita.',
-      change_detail: 'Probabilidad de lluvia: 15% → 5% · Confianza alta (88%)',
-      recommendation: 'Momento ideal para fotografía panorámica; no olvides protector solar.',
-      created_at: 'Hace 1 h',
-      unread: true
-    },
-    {
-      id: 'notif-3',
-      event_id: 'ev-chenque-1',
-      city_id: 'comodoro-rivadavia',
-      title: 'Resumen de tu viaje a Comodoro Rivadavia',
-      message: '5 días monitoreados: predominio de sol entre 17°C y 22°C, con descenso térmico leve el martes.',
-      change_detail: 'Monitoreo activo en centroide GeoRef (-45.88, -67.52)',
-      recommendation: 'Empacar ropa en capas y calzado cómodo.',
-      created_at: 'Ayer',
-      unread: false
-    }
-  ];
+  // Artículos exactos de Wikipedia Argentina para obtener fotos reales de las 25 ciudades
+  const CITY_WIKI_TITLES = {
+    'comodoro-rivadavia': 'Comodoro_Rivadavia',
+    'puerto-madryn': 'Puerto_Madryn',
+    'trelew': 'Trelew',
+    'rio-gallegos': 'Río_Gallegos',
+    'ushuaia': 'Ushuaia',
+    'bariloche': 'San_Carlos_de_Bariloche',
+    'neuquen': 'Neuquén_(ciudad)',
+    'buenos-aires': 'Buenos_Aires',
+    'la-plata': 'La_Plata',
+    'mar-del-plata': 'Mar_del_Plata',
+    'bahia-blanca': 'Bahía_Blanca',
+    'rosario': 'Rosario_(Argentina)',
+    'cordoba': 'Córdoba_(Argentina)',
+    'santa-fe': 'Santa_Fe_(Argentina)',
+    'mendoza': 'Mendoza_(Argentina)',
+    'san-juan': 'San_Juan_(Argentina)',
+    'san-luis': 'San_Luis_(Argentina)',
+    'salta': 'Salta',
+    'san-salvador-de-jujuy': 'San_Salvador_de_Jujuy',
+    'san-miguel-de-tucuman': 'San_Miguel_de_Tucumán',
+    'santiago-del-estero': 'Santiago_del_Estero_(ciudad)',
+    'posadas': 'Posadas_(Argentina)',
+    'corrientes': 'Corrientes_(ciudad)',
+    'resistencia': 'Resistencia_(ciudad)',
+    'formosa': 'Formosa_(ciudad)'
+  };
 
   function offsetIsoDate(daysOffset, baseIso) {
     const base = baseIso ? new Date(Time.parse(baseIso)) : new Date();
@@ -203,7 +157,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     climatology_reference: 'CLIMATOLOGÍA', unavailable: 'SIN DATOS'
   };
 
-  // Íconos SVG de clima
   function weatherSvg(type) {
     if (type === 'rain') {
       return `<svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.9" stroke-linecap="round"><path d="M17.5 17H7a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.3 10a3.5 3.5 0 0 1 .2 7Z"/><path d="M9 20l-1 2M13 20l-1 2M17 20l-1 2"/></svg>`;
@@ -214,7 +167,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     return `<svg viewBox="0 0 24 24" fill="none" stroke="#facc15" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/></svg>`;
   }
 
-  // Cálculo astronómico real de horas de luz (Luz) e índice UV estimado según latitud, fecha y nubosidad
   function calculateDaylightAndUV(lat, isoDateStr, cloudPct = 20) {
     const d = new Date(Time.parse(isoDateStr));
     const startYear = new Date(Date.UTC(d.getUTCFullYear(), 0, 0));
@@ -233,6 +185,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     const cloudFactor = 1 - Math.min(0.65, (cloudPct / 100) * 0.6);
     const uv = Math.max(1, Math.round(clearSkyUV * cloudFactor));
     return { lightStr, uv };
+  }
+
+  // Suma horas a fecha/hora local Argentina (-03:00) cuidando el cruce de medianoche
+  function buildArgentinaStartEnd(dateStr, timeStr, durationHours = 2) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const [hh, mm] = (timeStr || '10:30').split(':').map(Number);
+    const startUtc = new Date(Date.UTC(y, m - 1, d, hh, mm, 0));
+    const endUtc = new Date(startUtc.getTime() + durationHours * 3600000);
+    const fmt = dt => {
+      const yy = dt.getUTCFullYear();
+      const mo = String(dt.getUTCMonth() + 1).padStart(2, '0');
+      const da = String(dt.getUTCDate()).padStart(2, '0');
+      const hr = String(dt.getUTCHours()).padStart(2, '0');
+      const mi = String(dt.getUTCMinutes()).padStart(2, '0');
+      return `${yy}-${mo}-${da}T${hr}:${mi}:00-03:00`;
+    };
+    return { start: fmt(startUtc), end: fmt(endUtc) };
   }
 
   function notice(message, error = false) {
@@ -256,6 +225,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!response.ok) {
       const error = new Error(body.error?.message || 'Solicitud no disponible');
       error.code = body.error?.code;
+      error.status = response.status;
       throw error;
     }
     return body.data;
@@ -279,7 +249,61 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.dataset.variable = state.variable;
   }
 
-  // Control de paneles del Inspector (Calendario, Notificaciones, Agregar Evento, Predicción, Guardados, Ciencia)
+  // ==================== LAYOUT MÓVIL / COMPACTO ====================
+  function syncMobileLayout(initial = false) {
+    if (isMobile()) {
+      if (initial) {
+        $('best-season-card').hidden = true;
+        $('map-layers-card').hidden = true;
+        $('destination-card').classList.add('is-compact');
+      }
+      $('mob-open-dest').hidden = !$('destination-card').hidden;
+    } else {
+      $('destination-card').classList.remove('is-compact');
+      $('mob-open-dest').hidden = true;
+      if ($('best-season-card').hidden && $('reopen-season-btn').hidden) {
+        $('best-season-card').hidden = false;
+      }
+      if ($('map-layers-card').hidden && $('reopen-layers-btn').hidden) {
+        $('map-layers-card').hidden = false;
+      }
+    }
+  }
+
+  function setDestinationCompact(compact) {
+    $('destination-card').classList.toggle('is-compact', compact);
+    $('toggle-compact-dest').textContent = compact ? '▴' : '▾';
+  }
+
+  $('toggle-compact-dest').onclick = () => {
+    setDestinationCompact(!$('destination-card').classList.contains('is-compact'));
+  };
+  $('compact-expand-trigger').onclick = () => {
+    setDestinationCompact(false);
+  };
+  $('mob-open-dest').onclick = () => {
+    $('destination-card').hidden = false;
+    setDestinationCompact(false);
+    $('mob-open-dest').hidden = true;
+  };
+  $('mob-open-layers').onclick = () => {
+    const open = $('map-layers-card').hidden;
+    $('map-layers-card').hidden = !open;
+    $('best-season-card').hidden = true;
+    $('mob-open-layers').classList.toggle('active', open);
+    $('mob-open-season').classList.remove('active');
+    if (open) panel(null);
+  };
+  $('mob-open-season').onclick = () => {
+    const open = $('best-season-card').hidden;
+    $('best-season-card').hidden = !open;
+    $('map-layers-card').hidden = true;
+    $('mob-open-season').classList.toggle('active', open);
+    $('mob-open-layers').classList.remove('active');
+    if (open) panel(null);
+  };
+
+  // ==================== CONTROL DE PANELES DEL INSPECTOR ====================
   function panel(name) {
     document.body.classList.toggle('inspector-open', !!name);
     if (state.panel !== name && $('inspector')) $('inspector').scrollTop = 0;
@@ -289,6 +313,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.querySelectorAll('button[data-panel]').forEach(b => b.classList.remove('active'));
       return;
     }
+    if (isMobile()) {
+      $('best-season-card').hidden = true;
+      $('map-layers-card').hidden = true;
+      $('mob-open-layers').classList.remove('active');
+      $('mob-open-season').classList.remove('active');
+    }
     state.panel = name;
     $('inspector').hidden = false;
     const titles = {
@@ -297,9 +327,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       'add-event': 'Agregar evento',
       prediction: 'Predicción climática',
       saved: 'Guardados',
-      data: 'Datos científicos de la selección',
-      profile: 'Perfil ambiental de ciudad',
-      events: 'Mi espacio · cuenta y eventos',
+      data: 'Datos científicos',
+      profile: 'Perfil ambiental',
+      events: user ? `Mi cuenta · @${user.username}` : 'Iniciar sesión / Crear cuenta',
       impact: 'Impactos y evidencia'
     };
     $('drawer-title').textContent = titles[name] || 'Información';
@@ -308,7 +338,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (name === 'profile') safe(profile)();
     if (name === 'calendar') { renderAgendaList(); calendar(); }
     if (name === 'notifications') renderNotificationsPanel();
-    if (name === 'add-event') prepareQuickEventForm();
+    if (name === 'add-event') syncAddEventAuthGate();
     if (name === 'prediction') renderPredictionPanel();
     if (name === 'saved') renderSavedPanel();
     if (name === 'events') safe(loadAccount)();
@@ -335,30 +365,238 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('toggle-tools').onclick = () => tools($('tools').hidden);
   $('close-tools').onclick = () => tools(false);
 
-  // Cerrar/abrir tarjeta izquierda de ciudad y tarjetas derechas
-  $('close-destination-card').onclick = () => { $('destination-card').hidden = true; };
-  $('close-season-card').onclick = () => { $('best-season-card').hidden = true; $('reopen-season-btn').hidden = false; };
-  $('close-layers-card').onclick = () => { $('map-layers-card').hidden = true; $('reopen-layers-btn').hidden = false; };
+  $('close-destination-card').onclick = () => {
+    $('destination-card').hidden = true;
+    if (isMobile()) $('mob-open-dest').hidden = false;
+  };
+  $('close-season-card').onclick = () => {
+    $('best-season-card').hidden = true;
+    $('mob-open-season').classList.remove('active');
+    if (!isMobile()) $('reopen-season-btn').hidden = false;
+  };
+  $('close-layers-card').onclick = () => {
+    $('map-layers-card').hidden = true;
+    $('mob-open-layers').classList.remove('active');
+    if (!isMobile()) $('reopen-layers-btn').hidden = false;
+  };
   $('reopen-season-btn').onclick = () => { $('best-season-card').hidden = false; $('reopen-season-btn').hidden = true; };
   $('reopen-layers-btn').onclick = () => { $('map-layers-card').hidden = false; $('reopen-layers-btn').hidden = true; };
 
-  // Botones principales de la tarjeta izquierda: "Agregar evento" y "Predicción"
   $('btn-add-event-card').onclick = () => {
     $('quick-event-result').hidden = true;
+    resetQuickEventForm();
     panel('add-event');
   };
-  $('btn-prediction-card').onclick = () => {
-    panel('prediction');
+  $('btn-prediction-card').onclick = () => panel('prediction');
+  $('btn-login-from-agenda').onclick = () => { state.postAuthPanel = 'calendar'; panel('events'); };
+  $('btn-login-from-saved').onclick = () => { state.postAuthPanel = 'saved'; panel('events'); };
+
+  // Mostrar / ocultar contraseña
+  document.querySelectorAll('[data-toggle-pass]').forEach(btn => {
+    btn.onclick = () => {
+      const input = $(btn.dataset.togglePass);
+      if (!input) return;
+      const hidden = input.type === 'password';
+      input.type = hidden ? 'text' : 'password';
+      btn.textContent = hidden ? 'Ocultar' : 'Ver';
+    };
+  });
+
+  // Pestañas Iniciar sesión / Crear cuenta dentro de Agregar evento
+  document.querySelectorAll('.auth-tab').forEach(tab => {
+    tab.onclick = () => {
+      state.inlineAuthMode = tab.dataset.authMode;
+      document.querySelectorAll('.auth-tab').forEach(t => t.classList.toggle('active', t === tab));
+      $('inline-auth-submit').textContent = state.inlineAuthMode === 'register'
+        ? 'Crear cuenta y continuar al evento'
+        : 'Ingresar y continuar al evento';
+      $('inline-password').setAttribute('autocomplete', state.inlineAuthMode === 'register' ? 'new-password' : 'current-password');
+      $('inline-auth-error').hidden = true;
+    };
+  });
+
+  // ==================== CUENTA, SESIÓN Y PERSISTENCIA EN SQLITE ====================
+  function updateAuthUI() {
+    const loggedIn = !!user;
+    $('btn-avatar').classList.toggle('logged-in', loggedIn);
+    $('avatar-initial').textContent = loggedIn ? user.username.charAt(0).toUpperCase() : '👤';
+    $('avatar-username').textContent = loggedIn ? user.username : 'Ingresar';
+    $('auth').hidden = loggedIn;
+    $('account').hidden = !loggedIn;
+    $('agenda-auth-banner').hidden = loggedIn;
+    $('saved-auth-banner').hidden = loggedIn;
+    if (loggedIn) {
+      $('account-name').textContent = '@' + user.username;
+      $('account-big-avatar').textContent = user.username.charAt(0).toUpperCase();
+      $('account-stats-text').textContent = `${events.filter(e => e.status === 'active').length} evento(s) · ${savedCities.size} destino(s) guardado(s)`;
+      $('qe-active-user').textContent = '@' + user.username;
+    }
+    syncAddEventAuthGate();
+    updateSaveCityButton();
+    updateNotificationBadge();
+  }
+
+  function syncAddEventAuthGate() {
+    const loggedIn = !!user;
+    $('qe-auth-gate').hidden = loggedIn;
+    $('qe-form-container').hidden = !loggedIn;
+    if (loggedIn) {
+      prepareQuickEventForm();
+    }
+  }
+
+  async function saveAccountPreferences() {
+    if (!user) return;
+    try {
+      await api('/api/account/preferences', {
+        method: 'PUT',
+        body: JSON.stringify({
+          saved_cities: [...savedCities],
+          trip: {
+            city_id: state.city_id,
+            start_date: state.tripStartDate,
+            duration_days: state.tripDurationDays
+          }
+        })
+      });
+      updateAuthUI();
+    } catch (error) {
+      notice(error.message, true);
+    }
+  }
+
+  async function loadAccount() {
+    try {
+      const me = await api('/api/session');
+      user = me.user;
+      csrf = me.csrf_token;
+      if (!user) {
+        events = [];
+        notificationRows = [];
+        savedCities = new Set();
+        updateAuthUI();
+        renderEventsListInAccount();
+        if (state.panel === 'calendar') renderAgendaList();
+        if (state.panel === 'notifications') renderNotificationsPanel();
+        if (state.panel === 'saved') renderSavedPanel();
+        renderEvents();
+        return;
+      }
+
+      const [evList, notifList, prefs] = await Promise.all([
+        api('/api/events'),
+        api('/api/notifications'),
+        api('/api/account/preferences').catch(() => ({ saved_cities: [], trip: null }))
+      ]);
+      events = evList || [];
+      notificationRows = notifList || [];
+      savedCities = new Set(prefs?.saved_cities || []);
+      if (prefs?.trip?.start_date) {
+        state.tripStartDate = prefs.trip.start_date;
+        state.tripDurationDays = prefs.trip.duration_days || 5;
+      }
+
+      updateAuthUI();
+      renderEventsListInAccount();
+      renderEvents();
+      renderTripBar();
+      if (state.panel === 'calendar') renderAgendaList();
+      if (state.panel === 'notifications') renderNotificationsPanel();
+      if (state.panel === 'saved') renderSavedPanel();
+    } catch (error) {
+      notice(error.message, true);
+    }
+  }
+
+  async function performAuth(action, username, password, errorEl) {
+    errorEl.hidden = true;
+    errorEl.classList.remove('ok');
+    if (!csrf) {
+      const sess = await api('/api/session');
+      csrf = sess.csrf_token;
+    }
+    try {
+      const me = await api('/api/session/' + action, {
+        method: 'POST',
+        body: JSON.stringify({ username: username.trim(), password })
+      });
+      csrf = me.csrf_token;
+      user = me.user;
+      await loadAccount();
+      return true;
+    } catch (error) {
+      errorEl.textContent = error.message;
+      errorEl.hidden = false;
+      return false;
+    }
+  }
+
+  // Login / Registro dentro de "Agregar evento"
+  $('inline-auth-form').onsubmit = async e => {
+    e.preventDefault();
+    const btn = $('inline-auth-submit');
+    btn.disabled = true;
+    const ok = await performAuth(
+      state.inlineAuthMode,
+      $('inline-username').value,
+      $('inline-password').value,
+      $('inline-auth-error')
+    );
+    btn.disabled = false;
+    if (ok) {
+      $('inline-password').value = '';
+      syncAddEventAuthGate();
+      prepareQuickEventForm();
+      notice(`Sesión iniciada como @${user.username}. Ya podés guardar eventos en tu cuenta.`);
+    }
   };
 
-  // Botón de guardar ciudad en favoritos
-  $('btn-save-city').onclick = () => {
+  // Login / Registro en el panel "Mi cuenta"
+  $('auth-form').onsubmit = async e => {
+    e.preventDefault();
+    const f = $('auth-form').elements;
+    const action = e.submitter?.name === 'register' ? 'register' : 'login';
+    const ok = await performAuth(action, f.username.value, f.password.value, $('main-auth-error'));
+    if (ok) {
+      f.password.value = '';
+      $('drawer-title').textContent = `Mi cuenta · @${user.username}`;
+      notice(`Sesión iniciada como @${user.username}.`);
+      if (state.postAuthPanel) {
+        const dest = state.postAuthPanel;
+        state.postAuthPanel = null;
+        panel(dest);
+      }
+    }
+  };
+
+  $('logout').onclick = safe(async () => {
+    await api('/api/session/logout', { method: 'POST', body: '{}' });
+    user = null;
+    events = [];
+    notificationRows = [];
+    savedCities = new Set();
+    $('quick-event-result').hidden = true;
+    await loadAccount();
+    $('drawer-title').textContent = 'Iniciar sesión / Crear cuenta';
+    notice('Sesión cerrada.');
+  });
+
+  // Guardar / quitar ciudad favorita (persistido en SQLite si está logueado)
+  $('btn-save-city').onclick = async () => {
+    if (!user) {
+      state.postAuthPanel = 'saved';
+      panel('events');
+      $('main-auth-error').textContent = 'Iniciá sesión o creá una cuenta para guardar ciudades favoritas.';
+      $('main-auth-error').hidden = false;
+      return;
+    }
     if (savedCities.has(state.city_id)) {
       savedCities.delete(state.city_id);
     } else {
       savedCities.add(state.city_id);
     }
     updateSaveCityButton();
+    await saveAccountPreferences();
     if (state.panel === 'saved') renderSavedPanel();
   };
 
@@ -407,7 +645,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       (windRes?.series || []).forEach(p => {
         const d = p.date.slice(0, 10);
-        if (byDay.has(d) && p.value != null) byDay.get(d).winds.push(p.value * 3.6); // m/s a km/h
+        if (byDay.has(d) && p.value != null) byDay.get(d).winds.push(p.value * 3.6);
       });
       (cloudRes?.series || []).forEach(p => {
         const d = p.date.slice(0, 10);
@@ -448,11 +686,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         weatherForecastCache.set(cityId, days);
         return days;
       }
-    } catch (_) {
-      // Si no hay red hacia Open-Meteo, se deriva de la climatología/perfil local de la ciudad
-    }
+    } catch (_) {}
 
-    // Fallback determinístico basado en la latitud de la ciudad cuando Open-Meteo no responde
     const baseTemps = [20, 21, 22, 19, 17, 18, 20, 22, 23, 21, 20, 19, 21, 22];
     const baseIcons = ['sun', 'sun', 'sun', 'cloud', 'rain', 'cloud', 'sun', 'sun', 'sun', 'cloud', 'sun', 'sun', 'cloud', 'sun'];
     const baseRains = [5, 5, 10, 20, 60, 25, 5, 5, 10, 15, 5, 10, 20, 5];
@@ -484,7 +719,45 @@ document.addEventListener('DOMContentLoaded', async () => {
     return fallbackDays;
   }
 
-  // ==================== ACTUALIZAR TARJETA IZQUIERDA DEL DESTINO ====================
+  async function computeEventWeatherSummary(ev) {
+    const days = await getCityForecastDays(ev.city_id);
+    const dateStr = ev.start.slice(0, 10);
+    const matchDay = days.find(d => d.date === dateStr) || days[0];
+    const diffDays = Math.max(0, Math.round((Time.parse(dateStr) - Date.now()) / 86400000));
+    const confidence = diffDays <= 3
+      ? 'Alta (90%) · Horizonte cercano Open-Meteo'
+      : diffDays <= 7
+        ? 'Media-Alta (82%) · Pronóstico operativo Open-Meteo'
+        : diffDays <= 15
+          ? 'Media (70%) · Horizonte extendido 16 días'
+          : 'Referencia climatológica NASA POWER (2000–2024)';
+
+    let tag = 'Ideal', tagClass = 'tag-ideal', iconEmoji = '☀️', rec = '';
+    if (ev.activity === 'indoor' || ev.outdoor === false) {
+      tag = 'Techado';
+      tagClass = 'tag-indoor';
+      iconEmoji = '🏛️';
+      rec = `Actividad bajo techo sin restricciones climáticas. Afuera se esperan ${matchDay.temp}°C y viento de ${matchDay.windKmh} km/h.`;
+    } else if (matchDay.rainProb >= 45) {
+      tag = 'Lluvia probable';
+      tagClass = 'tag-rain';
+      iconEmoji = '🌧️';
+      rec = `Probabilidad de lluvia del ${matchDay.rainProb}%. Se recomienda llevar equipo impermeable o evaluar otro horario.`;
+    } else if (matchDay.windKmh >= 35) {
+      tag = 'Ventoso';
+      tagClass = 'tag-windy';
+      iconEmoji = '💨';
+      rec = `Buena temperatura (${matchDay.temp}°C) pero viento de ${matchDay.windKmh} km/h. Llevá cortaviento, anteojos de sol y protector.`;
+    } else {
+      tag = 'Ideal';
+      tagClass = 'tag-ideal';
+      iconEmoji = '☀️';
+      rec = `Condiciones muy favorables (${matchDay.temp}°C, lluvia ${matchDay.rainProb}%). Llevá protector solar (UV ${matchDay.uv}) y agua.`;
+    }
+    return { ...matchDay, confidence, tag, tagClass, iconEmoji, recommendation: rec };
+  }
+
+  // ==================== TARJETA IZQUIERDA DEL DESTINO ====================
   async function updateDestinationCard(dayObj) {
     const city = cities.find(c => c.id === state.city_id);
     if (!city) return;
@@ -500,12 +773,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       : activeDay.temp;
 
     $('dest-temp-value').textContent = String(tempVal);
+    $('compact-temp-val').textContent = `${tempVal}°`;
     $('dest-stat-wind').textContent = `${activeDay.windKmh} km/h`;
     $('dest-stat-rain').textContent = `${activeDay.rainProb} %`;
     $('dest-stat-uv').textContent = String(activeDay.uv);
     $('dest-stat-light').textContent = activeDay.lightStr;
 
-    // Cartel verde "Buen momento para visitar" y resumen dinámico
     const badge = $('dest-visit-badge');
     const summary = $('dest-weather-summary');
     if (activeDay.rainProb >= 50) {
@@ -524,7 +797,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         : 'Cielo agradable, baja probabilidad de lluvia y viento moderado.';
     }
 
-    // Chips de "QUÉ LLEVAR"
     const chips = [];
     if (activeDay.windKmh >= 22) chips.push('Cortaviento');
     if (activeDay.uv >= 5 || activeDay.icon === 'sun') {
@@ -532,62 +804,141 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (activeDay.rainProb >= 35) chips.push('Piloto impermeable');
     if (tempVal <= 14) chips.push('Abrigo térmico');
-    if (chips.length < 4) {
-      for (const extra of ['Cortaviento', 'Anteojos de sol', 'Protector solar', 'Gorra', 'Calzado cómodo']) {
-        if (!chips.includes(extra) && chips.length < 4) chips.push(extra);
-      }
+    for (const extra of ['Cortaviento', 'Anteojos de sol', 'Protector solar', 'Gorra']) {
+      if (!chips.includes(extra) && chips.length < 4) chips.push(extra);
     }
     $('dest-what-to-wear').innerHTML = chips.slice(0, 4).map(c => `<span class="wear-chip">${escape(c)}</span>`).join('');
 
-    // Lista "PARA HACER HOY" con etiquetas de color
     const activities = getCityActivities(city);
     $('dest-todo-list').innerHTML = activities.map(act => {
       let tagText = 'Ideal', tagClass = 'tag-ideal';
       if (act.type === 'indoor') {
-        tagText = 'Techado';
-        tagClass = 'tag-indoor';
+        tagText = 'Techado'; tagClass = 'tag-indoor';
       } else if (act.type === 'coastal') {
         if (activeDay.rainProb >= 45) { tagText = 'Lluvia'; tagClass = 'tag-rain'; }
         else if (activeDay.windKmh >= 25) { tagText = 'Ventoso'; tagClass = 'tag-windy'; }
-        else { tagText = 'Ideal'; tagClass = 'tag-ideal'; }
       } else {
         if (activeDay.rainProb >= 45) { tagText = 'Revisar'; tagClass = 'tag-rain'; }
         else if (activeDay.windKmh >= 45) { tagText = 'Ventoso'; tagClass = 'tag-windy'; }
-        else { tagText = 'Ideal'; tagClass = 'tag-ideal'; }
       }
       return `<li class="todo-item"><span class="todo-name">${escape(act.name)}</span><span class="todo-tag ${tagClass}">${escape(tagText)}</span></li>`;
     }).join('');
 
-    // Foto real geolocalizada del perfil si está disponible
     updateCityPhotoAndClimatology(city.id);
   }
 
-  async function updateCityPhotoAndClimatology(cityId) {
+  async function resolveCityPhoto(city, backendImage) {
+    if (backendImage?.image_url) {
+      return {
+        url: backendImage.image_url,
+        label: city.name,
+        credit: `${backendImage.caption || backendImage.title || city.name} · ${backendImage.author || 'Wikimedia Commons'} (${backendImage.license || 'CC'})`
+      };
+    }
+    if (cityPhotoCache.has(city.id)) return cityPhotoCache.get(city.id);
+
+    let resolved = null;
+    const wikiTitle = CITY_WIKI_TITLES[city.id] || encodeURIComponent(city.name);
+
+    // 1) Foto principal del artículo oficial de Wikipedia Argentina (con CORS abierto)
     try {
-      let prof = cityProfileCache.get(cityId);
+      const resp = await fetch(`https://es.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle)}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        const candidateUrl = data.thumbnail?.source || data.originalimage?.source || '';
+        const lower = candidateUrl.toLowerCase();
+        const isPhoto = /\.(jpe?g|webp)(\?|$)/i.test(lower) && !lower.includes('escudo') && !lower.includes('bandera') && !lower.includes('flag') && !lower.includes('coat_of_arms') && !lower.includes('location_map');
+        if (candidateUrl && isPhoto) {
+          const crispUrl = candidateUrl.replace(/\/\d+px-/, '/800px-');
+          resolved = {
+            url: crispUrl,
+            label: `Foto · ${city.name}`,
+            credit: `Fotografía ilustrativa de ${data.title || city.name} vía Wikipedia / Wikimedia Commons`
+          };
+        }
+      }
+    } catch (_) {}
+
+    // 2) Respaldo geolocalizado en Wikimedia Commons cerca del centroide GeoRef de la ciudad
+    if (!resolved) {
+      try {
+        const qs = new URLSearchParams({
+          action: 'query',
+          generator: 'geosearch',
+          ggscoord: `${city.latitude}|${city.longitude}`,
+          ggsradius: '6000',
+          ggslimit: '12',
+          ggsnamespace: '6',
+          prop: 'imageinfo',
+          iiprop: 'url',
+          iiurlwidth: '800',
+          format: 'json',
+          origin: '*'
+        });
+        const resp = await fetch('https://commons.wikimedia.org/w/api.php?' + qs);
+        if (resp.ok) {
+          const data = await resp.json();
+          const pages = Object.values(data.query?.pages || {});
+          const photoPage = pages.find(p => {
+            const t = (p.title || '').toLowerCase();
+            return (t.endsWith('.jpg') || t.endsWith('.jpeg')) && !t.includes('escudo') && !t.includes('mapa') && p.imageinfo?.[0]?.thumburl;
+          });
+          if (photoPage) {
+            resolved = {
+              url: photoPage.imageinfo[0].thumburl,
+              label: `Foto · ${city.name}`,
+              credit: `${photoPage.title.replace(/^File:/i, '')} · Wikimedia Commons`
+            };
+          }
+        }
+      } catch (_) {}
+    }
+
+    cityPhotoCache.set(city.id, resolved);
+    return resolved;
+  }
+
+  function applyCityPhoto(photoObj, cityName) {
+    const imgEl = $('dest-photo-img');
+    const labelEl = $('dest-photo-label');
+    if (photoObj && photoObj.url) {
+      imgEl.onload = () => { imgEl.hidden = false; };
+      imgEl.onerror = () => {
+        imgEl.hidden = true;
+        labelEl.textContent = 'Foto del destino';
+      };
+      imgEl.src = photoObj.url;
+      imgEl.alt = `Fotografía de ${cityName}`;
+      imgEl.hidden = false;
+      labelEl.textContent = photoObj.label || 'Foto del destino';
+      labelEl.title = photoObj.credit || `Foto ilustrativa de ${cityName}`;
+    } else {
+      imgEl.hidden = true;
+      labelEl.textContent = 'Foto del destino';
+      labelEl.title = 'Ilustración representativa del destino';
+    }
+  }
+
+  async function updateCityPhotoAndClimatology(cityId) {
+    const city = cities.find(c => c.id === cityId);
+    if (!city) return;
+    let prof = cityProfileCache.get(cityId);
+    try {
       if (!prof) {
         prof = await api('/api/workspace/profiles/' + cityId);
         cityProfileCache.set(cityId, prof);
       }
       if (cityId !== state.city_id) return;
-      const img = prof?.general?.image;
-      if (img && img.image_url) {
-        $('dest-photo-img').src = img.image_url;
-        $('dest-photo-img').alt = img.caption || img.title || `Foto de ${prof.city.name}`;
-        $('dest-photo-img').hidden = false;
-        $('dest-photo-label').title = `${img.caption || img.title} · ${img.author} (${img.license})`;
-      } else {
-        $('dest-photo-img').hidden = true;
-        $('dest-photo-label').title = 'Ilustración representativa del destino';
-      }
       renderBestSeasonBars(prof);
     } catch (_) {
-      $('dest-photo-img').hidden = true;
       renderBestSeasonBars(null);
     }
+
+    const photoObj = await resolveCityPhoto(city, prof?.general?.image);
+    if (cityId !== state.city_id) return;
+    applyCityPhoto(photoObj, city.name);
   }
 
-  // Gráfico de 12 meses "Mejor época para ir / Clima típico"
   function renderBestSeasonBars(prof) {
     const monthLetters = ['E', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
     const monthsData = prof?.climatology?.T2M?.months;
@@ -597,21 +948,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     let cols = [];
     if (monthsData && monthsData.length === 12 && monthsData.some(m => m.mean != null)) {
       const means = monthsData.map(m => m.mean ?? 15);
-      const minM = Math.min(...means), maxM = Math.max(...means);
-      const span = Math.max(1, maxM - minM);
+      const minM = Math.min(...means), maxM = Math.max(...means), span = Math.max(1, maxM - minM);
       cols = monthsData.map((m, idx) => {
         const val = m.mean ?? 15;
         const norm = (val - minM) / span;
-        const heightPct = Math.round(34 + norm * 56);
-        const barType = norm >= 0.72 ? 'ideal' : norm >= 0.36 ? 'good' : 'cold';
-        return { letter: monthLetters[idx], heightPct, barType, title: `Media: ${number(val)} °C` };
+        return {
+          letter: monthLetters[idx],
+          heightPct: Math.round(34 + norm * 56),
+          barType: norm >= 0.72 ? 'ideal' : norm >= 0.36 ? 'good' : 'cold',
+          title: `Media: ${number(val)} °C`
+        };
       });
     } else {
       cols = monthLetters.map((letter, idx) => ({
-        letter,
-        heightPct: defaultHeights[idx],
-        barType: defaultTypes[idx],
-        title: `Clima típico · mes ${idx + 1}`
+        letter, heightPct: defaultHeights[idx], barType: defaultTypes[idx], title: `Clima típico · mes ${idx + 1}`
       }));
     }
 
@@ -629,14 +979,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const shortCityName = city.name.split(' ')[0] === 'Comodoro' ? 'Comodoro' : city.name;
     const allDays = await getCityForecastDays(state.city_id);
     const stripDays = allDays.slice(0, 9);
-    const tripStartIdx = Math.max(0, Math.min(8, state.tripStartOffset));
+    const foundStart = stripDays.findIndex(d => d.date === state.tripStartDate);
+    const tripStartIdx = foundStart >= 0 ? foundStart : 0;
     const tripEndIdx = Math.min(8, tripStartIdx + state.tripDurationDays - 1);
 
     const fmtDayShort = iso => {
       const d = new Date(Time.parse(iso));
       const w = d.toLocaleDateString('es-AR', { weekday: 'short', timeZone: 'UTC' }).replace('.', '');
-      const cap = w.charAt(0).toUpperCase() + w.slice(1, 3);
-      return `${cap} ${d.getUTCDate()}`;
+      return `${w.charAt(0).toUpperCase() + w.slice(1, 3)} ${d.getUTCDate()}`;
     };
     const fmtRangeDate = iso => {
       const d = new Date(Time.parse(iso));
@@ -679,43 +1029,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  $('btn-trip-config').onclick = () => {
-    $('trip-popover').hidden = !$('trip-popover').hidden;
-  };
+  $('btn-trip-config').onclick = () => { $('trip-popover').hidden = !$('trip-popover').hidden; };
+  $('close-trip-popover').onclick = () => { $('trip-popover').hidden = true; };
   $('btn-apply-trip').onclick = async () => {
-    const allDays = await getCityForecastDays(state.city_id);
-    const chosenStart = $('trip-start-input').value;
-    const foundIdx = allDays.slice(0, 9).findIndex(d => d.date === chosenStart);
-    state.tripStartOffset = foundIdx >= 0 ? foundIdx : 0;
+    state.tripStartDate = $('trip-start-input').value || new Date().toISOString().slice(0, 10);
     state.tripDurationDays = Math.max(1, Math.min(9, Number($('trip-days-input').value) || 5));
     $('trip-popover').hidden = true;
     renderTripBar();
+    await saveAccountPreferences();
   };
   $('btn-toggle-scrubber').onclick = () => {
     $('advanced-timeline').hidden = !$('advanced-timeline').hidden;
     $('trip-popover').hidden = true;
   };
 
-  // ==================== CAPAS DEL MAPA (Temperatura, Lluvia, Viento, Satélite) ====================
+  // ==================== CAPAS DEL MAPA ====================
   const LAYER_CONFIGS = {
-    temperature: {
-      variable: 'T2M',
-      minText: 'Frío',
-      maxText: 'Calor',
-      colors: ['#5b8def', '#38d9a9', '#f5b82e', '#f97316']
-    },
-    rain: {
-      variable: 'PRECTOTCORR',
-      minText: 'Seco',
-      maxText: 'Lluvia',
-      colors: ['#475569', '#38bdf8', '#3b82f6', '#1d4ed8']
-    },
-    wind: {
-      variable: 'WS2M',
-      minText: 'Calmo',
-      maxText: 'Intenso',
-      colors: ['#38d9a9', '#a3e635', '#facc15', '#ef4444']
-    }
+    temperature: { variable: 'T2M', minText: 'Frío', maxText: 'Calor', colors: ['#5b8def', '#38d9a9', '#f5b82e', '#f97316'] },
+    rain: { variable: 'PRECTOTCORR', minText: 'Seco', maxText: 'Lluvia', colors: ['#475569', '#38bdf8', '#3b82f6', '#1d4ed8'] },
+    wind: { variable: 'WS2M', minText: 'Calmo', maxText: 'Intenso', colors: ['#38d9a9', '#a3e635', '#facc15', '#ef4444'] }
   };
 
   document.querySelectorAll('[data-map-layer]').forEach(btn => {
@@ -724,13 +1056,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (layer === 'satellite') {
         const satActive = document.body.classList.toggle('satellite-active');
         btn.classList.toggle('active', satActive);
-        if (satActive) {
-          map.removeLayer(streetTiles);
-          satelliteTiles.addTo(map);
-        } else {
-          map.removeLayer(satelliteTiles);
-          streetTiles.addTo(map);
-        }
+        if (satActive) { map.removeLayer(streetTiles); satelliteTiles.addTo(map); }
+        else { map.removeLayer(satelliteTiles); streetTiles.addTo(map); }
         return;
       }
       state.mapLayer = layer;
@@ -750,206 +1077,239 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
   });
 
-  // ==================== INTERACCIÓN 1: CALENDARIO / AGENDA CON ETIQUETA DE CLIMA POR EVENTO ====================
-  function renderAgendaList() {
-    const allEvents = [
-      ...localAgendaEvents,
-      ...events.filter(e => e.status === 'active').map(e => ({
-        id: e.id,
-        city_id: e.city_id,
-        name: e.name,
-        date: e.start.slice(0, 10),
-        time: e.start.slice(11, 16),
-        place: e.location_label || (cities.find(c => c.id === e.city_id)?.name || e.city_id),
-        activity_type: e.activity || 'outdoor',
-        temp: 20,
-        windKmh: 28,
-        rainProb: 10,
-        tag: 'Favorable',
-        tagClass: 'tag-ideal'
-      }))
-    ];
-
-    if (!allEvents.length) {
-      $('agenda-events-container').innerHTML = '<p class="hint">Todavía no tenés eventos agendados. Usá "Agregar evento" para crear uno con predicción.</p>';
+  // ==================== INTERACCIÓN 1: CALENDARIO / AGENDA (DATOS REALES DE LA CUENTA) ====================
+  async function renderAgendaList() {
+    const activeEvents = events.filter(e => e.status === 'active');
+    if (!user) {
+      $('agenda-events-container').innerHTML = '';
+      return;
+    }
+    if (!activeEvents.length) {
+      $('agenda-events-container').innerHTML = '<p class="hint">Todavía no tenés eventos en tu cuenta. Tocá "+ Agregar evento" para guardar el primero.</p>';
       return;
     }
 
-    $('agenda-events-container').innerHTML = allEvents.map(ev => {
-      const iconEmoji = ev.rainProb >= 45 ? '🌧️' : ev.windKmh >= 34 ? '💨' : '☀️';
+    const enriched = await Promise.all(activeEvents.map(async ev => ({
+      ev,
+      wx: await computeEventWeatherSummary(ev)
+    })));
+
+    $('agenda-events-container').innerHTML = enriched.map(({ ev, wx }) => {
+      const cityName = cities.find(c => c.id === ev.city_id)?.name || ev.city_id;
+      const placeLabel = ev.location_label || cityName;
       return `
         <article class="agenda-card" data-agenda-id="${escape(ev.id)}">
           <div class="agenda-card-top">
             <div>
               <h3 class="agenda-card-title">${escape(ev.name)}</h3>
-              <p class="agenda-card-meta">${escape(ev.date)} · ${escape(ev.time)} hs · ${escape(ev.place)}</p>
+              <p class="agenda-card-meta">${escape(ev.start.slice(0, 10))} · ${escape(ev.start.slice(11, 16))} hs · ${escape(placeLabel)}</p>
             </div>
-            <span class="agenda-weather-pill ${escape(ev.tagClass || 'tag-ideal')}">
-              ${iconEmoji} ${ev.temp}° · ${escape(ev.tag || 'Ideal')}
+            <span class="agenda-weather-pill ${escape(wx.tagClass)}">
+              ${wx.iconEmoji} ${wx.temp}° · ${escape(wx.tag)}
             </span>
           </div>
           <div class="actions" style="margin-top:6px">
-            <button type="button" class="btn-text-teal" data-view-agenda="${escape(ev.id)}">Ver predicción del evento</button>
-            <button type="button" class="btn-text-teal" data-del-agenda="${escape(ev.id)}">Quitar</button>
+            <button type="button" class="btn-text-teal" data-view-ev="${escape(ev.id)}">Predicción</button>
+            <button type="button" class="btn-text-teal" data-edit-quick-ev="${escape(ev.id)}">Editar</button>
+            <button type="button" class="btn-danger-outline" data-del-ev="${escape(ev.id)}">Eliminar</button>
           </div>
         </article>
       `;
     }).join('');
 
-    $('agenda-events-container').querySelectorAll('[data-view-agenda]').forEach(btn => {
+    $('agenda-events-container').querySelectorAll('[data-view-ev]').forEach(btn => {
+      btn.onclick = async () => {
+        const pair = enriched.find(x => x.ev.id === btn.dataset.viewEv);
+        if (!pair) return;
+        if (pair.ev.city_id !== state.city_id) selectCity(pair.ev.city_id, { fetchData: false });
+        updateTime(pair.ev.start.slice(0, 10), { center: true });
+        panel('add-event');
+        showSavedEventPredictionCard(pair.ev, pair.wx, null);
+      };
+    });
+
+    $('agenda-events-container').querySelectorAll('[data-edit-quick-ev]').forEach(btn => {
       btn.onclick = () => {
-        const ev = allEvents.find(x => x.id === btn.dataset.viewAgenda);
+        const ev = activeEvents.find(x => x.id === btn.dataset.editQuickEv);
         if (!ev) return;
-        if (ev.city_id && ev.city_id !== state.city_id) selectCity(ev.city_id, { fetchData: false });
-        updateTime(ev.date, { center: true });
-        showSavedEventPredictionCard(ev);
+        loadEventIntoQuickForm(ev);
         panel('add-event');
       };
     });
 
-    $('agenda-events-container').querySelectorAll('[data-del-agenda]').forEach(btn => {
-      btn.onclick = () => {
-        localAgendaEvents = localAgendaEvents.filter(x => x.id !== btn.dataset.delAgenda);
-        renderAgendaList();
-        calendar();
-        renderEvents();
-      };
+    $('agenda-events-container').querySelectorAll('[data-del-ev]').forEach(btn => {
+      btn.onclick = safe(async () => {
+        await api('/api/events/' + btn.dataset.delEv, { method: 'DELETE' });
+        await loadAccount();
+        notice('Evento eliminado de tu cuenta.');
+      });
     });
   }
 
-  // ==================== INTERACCIÓN 2: CAMPANITA / NOTIFICACIONES CON NO LEÍDAS MARCADAS ====================
+  // ==================== INTERACCIÓN 2: CAMPANITA / NOTIFICACIONES (SQLITE) ====================
   function updateNotificationBadge() {
-    const serverUnread = notificationRows.filter(n => !n.read_at).length;
-    const localUnread = localNotifications.filter(n => n.unread).length;
-    const total = serverUnread + localUnread;
-    $('badge').textContent = total > 0 ? String(total) : '';
+    const unreadCount = notificationRows.filter(n => !n.read_at).length;
+    $('badge').textContent = unreadCount > 0 ? String(unreadCount) : '';
   }
 
   function renderNotificationsPanel() {
     updateNotificationBadge();
-    const combined = [
-      ...localNotifications,
-      ...notificationRows.map(n => ({
-        id: n.id,
-        event_id: n.event_id,
-        city_id: n.body?.event?.city_id || state.city_id,
-        title: n.title,
-        message: n.message,
-        change_detail: (n.body?.changes || []).map(c => `${c.criterion}: ${number(c.previous_value)} → ${number(c.current_value)} ${c.unit}`).join(' · '),
-        recommendation: n.body?.recommendation || 'Revisar condiciones del evento.',
-        created_at: n.created_at,
-        unread: !n.read_at,
-        fromServer: true
-      }))
-    ];
-
-    if (!combined.length) {
-      $('notifications-list').innerHTML = '<p class="hint">No tenés notificaciones pendientes.</p>';
+    if (!user) {
+      $('notifications-list').innerHTML = `
+        <div class="auth-prompt-card">
+          <p><strong>Iniciá sesión para recibir avisos</strong> cuando cambie el pronóstico de tus eventos guardados.</p>
+          <button id="btn-login-from-notifs" type="button" class="btn-cta-fill btn-sm">Iniciar sesión / Crear cuenta</button>
+        </div>
+      `;
+      $('btn-login-from-notifs').onclick = () => { state.postAuthPanel = 'notifications'; panel('events'); };
       return;
     }
 
-    $('notifications-list').innerHTML = combined.map(n => `
-      <article class="notif-item ${n.unread ? 'unread' : ''}" data-notif-id="${escape(n.id)}">
-        <div class="notif-item-head">
-          <strong>${escape(n.title)}</strong>
-          <span class="${n.unread ? 'unread-pill' : 'read-pill'}">${n.unread ? 'NO LEÍDA' : 'Leída'}</span>
-        </div>
-        <p style="margin:6px 0;font-size:12.5px;color:#e2e8f0">${escape(n.message)}</p>
-        ${n.change_detail ? `<p class="hint" style="margin:4px 0;color:#38d9a9">${escape(n.change_detail)}</p>` : ''}
-        <p class="hint" style="margin:4px 0">Recomendación: ${escape(n.recommendation)}</p>
-        <div class="actions" style="margin-top:8px;align-items:center;justify-content:space-between">
-          <span class="hint">${escape(n.created_at)}</span>
-          <div>
-            ${n.unread ? `<button type="button" class="btn-text-teal" data-mark-notif="${escape(n.id)}">Marcar leída</button>` : ''}
-            <button type="button" class="btn-text-teal" data-goto-notif="${escape(n.id)}">Ver en agenda</button>
+    const filtered = notificationRows.filter(n => !notificationEventFilter || n.event_id === notificationEventFilter);
+    if (!filtered.length) {
+      $('notifications-list').innerHTML = '<p class="hint">No tenés notificaciones pendientes en tu cuenta. Al guardar un evento con aviso activado verás aquí su seguimiento.</p>';
+      return;
+    }
+
+    $('notifications-list').innerHTML = filtered.map(n => {
+      const unread = !n.read_at;
+      const changesText = (n.body?.changes || []).map(c => `${c.criterion}: ${number(c.previous_value)} → ${number(c.current_value)} ${c.unit}`).join(' · ');
+      return `
+        <article class="notif-item ${unread ? 'unread' : ''}" data-notif-id="${escape(n.id)}">
+          <div class="notif-item-head">
+            <strong>${escape(n.title)}</strong>
+            <span class="${unread ? 'unread-pill' : 'read-pill'}">${unread ? 'NO LEÍDA' : 'Leída'}</span>
           </div>
-        </div>
-      </article>
-    `).join('');
+          <p style="margin:6px 0;font-size:12.5px;color:#e2e8f0">${escape(n.message)}</p>
+          ${changesText ? `<p class="hint" style="margin:4px 0;color:#38d9a9">${escape(changesText)}</p>` : ''}
+          <p class="hint" style="margin:4px 0">${escape(n.body?.recommendation || 'Revisar condiciones del evento.')}</p>
+          <div class="actions" style="margin-top:8px;align-items:center;justify-content:space-between">
+            <span class="hint">${escape(n.created_at?.slice(0, 16).replace('T', ' ') || '')}</span>
+            <div style="display:flex;gap:6px">
+              ${unread ? `<button type="button" class="btn-text-teal" data-mark-notif="${escape(n.id)}">Marcar leída</button>` : ''}
+              ${n.event_id ? `<button type="button" class="btn-text-teal" data-goto-notif-ev="${escape(n.event_id)}">Ver evento</button>` : ''}
+            </div>
+          </div>
+        </article>
+      `;
+    }).join('');
 
     $('notifications-list').querySelectorAll('[data-mark-notif]').forEach(btn => {
-      btn.onclick = async () => {
-        const id = btn.dataset.markNotif;
-        const loc = localNotifications.find(x => x.id === id);
-        if (loc) loc.unread = false;
-        const srv = notificationRows.find(x => String(x.id) === String(id));
-        if (srv) {
-          try { await api('/api/notifications/' + id, { method: 'PATCH', body: '{}' }); } catch (_) {}
-          srv.read_at = new Date().toISOString();
-        }
-        renderNotificationsPanel();
-      };
+      btn.onclick = safe(async () => {
+        await api('/api/notifications/' + btn.dataset.markNotif, { method: 'PATCH', body: '{}' });
+        await loadAccount();
+      });
     });
 
-    $('notifications-list').querySelectorAll('[data-goto-notif]').forEach(btn => {
-      btn.onclick = () => {
-        const id = btn.dataset.gotoNotif;
-        const loc = localNotifications.find(x => x.id === id);
-        if (loc) loc.unread = false;
-        updateNotificationBadge();
-        panel('calendar');
-      };
+    $('notifications-list').querySelectorAll('[data-goto-notif-ev]').forEach(btn => {
+      btn.onclick = safe(async () => {
+        const ev = events.find(e => e.id === btn.dataset.gotoNotifEv);
+        if (ev) {
+          selectCity(ev.city_id, { fetchData: false });
+          updateTime(ev.start.slice(0, 10), { center: true });
+          const wx = await computeEventWeatherSummary(ev);
+          panel('add-event');
+          showSavedEventPredictionCard(ev, wx, null);
+        } else {
+          panel('calendar');
+        }
+      });
     });
   }
 
-  $('mark-all-read').onclick = () => {
-    localNotifications.forEach(n => { n.unread = false; });
-    notificationRows.forEach(n => { n.read_at = n.read_at || new Date().toISOString(); });
-    renderNotificationsPanel();
+  $('mark-all-read').onclick = safe(async () => {
+    if (!user) return;
+    const unread = notificationRows.filter(n => !n.read_at);
+    await Promise.all(unread.map(n => api('/api/notifications/' + n.id, { method: 'PATCH', body: '{}' }).catch(() => null)));
+    await loadAccount();
+  });
+
+  // ==================== INTERACCIÓN 3: "AGREGAR EVENTO" (LOGIN + GUARDAR EN SQLITE) ====================
+  function resetQuickEventForm() {
+    $('qe-edit-id').value = '';
+    $('qe-panel-heading').textContent = 'Agregar evento';
+    $('btn-save-and-predict').textContent = 'Guardar y predecir';
+    $('qe-reset-form-btn').hidden = true;
+    $('qe-error-msg').hidden = true;
+    $('quick-event-form').reset();
+    $('qe-notify').checked = true;
+    $('qe-time').value = '10:30';
+    prepareQuickEventForm();
+  }
+
+  function loadEventIntoQuickForm(ev) {
+    if (ev.city_id !== state.city_id) selectCity(ev.city_id, { fetchData: false });
+    $('qe-edit-id').value = ev.id;
+    $('qe-panel-heading').textContent = 'Editar evento guardado';
+    $('btn-save-and-predict').textContent = 'Actualizar y predecir';
+    $('qe-reset-form-btn').hidden = false;
+    $('qe-name').value = ev.name;
+    $('qe-date').value = ev.start.slice(0, 10);
+    $('qe-time').value = ev.start.slice(11, 16);
+    $('qe-place').value = ev.location_label || '';
+    $('qe-type').value = ev.activity || 'outdoor';
+    $('qe-notify').checked = ev.notifications !== false;
+    $('qe-error-msg').hidden = true;
+    $('quick-event-result').hidden = true;
+  }
+
+  $('qe-reset-form-btn').onclick = () => {
+    resetQuickEventForm();
+    $('quick-event-result').hidden = true;
   };
 
-  // ==================== INTERACCIÓN 3: "AGREGAR EVENTO" ("Guardar y predecir") ====================
   function prepareQuickEventForm(prefillDate) {
     const city = cities.find(c => c.id === state.city_id) || { name: 'Comodoro Rivadavia' };
+    $('qe-city-label').textContent = city.name;
     const targetDate = prefillDate || state.date.slice(0, 10);
-    if (!$('qe-date').value || prefillDate) $('qe-date').value = targetDate;
-    if (!$('qe-place').value || !$('qe-place').value.includes(city.name)) {
-      const highlight = getCityActivities(city)[0]?.name || `Centro de ${city.name}`;
-      $('qe-place').value = `${highlight}, ${city.name}`;
+    if (!$('qe-edit-id').value) {
+      if (!$('qe-date').value || prefillDate) $('qe-date').value = targetDate;
+      if (!$('qe-place').value || !$('qe-place').value.includes(city.name)) {
+        const highlight = getCityActivities(city)[0]?.name || `Centro de ${city.name}`;
+        $('qe-place').value = `${highlight}, ${city.name}`;
+      }
     }
   }
 
-  function showSavedEventPredictionCard(ev) {
+  function showSavedEventPredictionCard(ev, wx, evalResult) {
     const box = $('quick-event-result');
     box.hidden = false;
+    const cityName = cities.find(c => c.id === ev.city_id)?.name || ev.city_id;
+    const assessment = evalResult?.assessment;
+    const statusBanner = assessment?.label || `${wx.tag} según predicción`;
+    const alternatives = (evalResult?.alternatives || []).slice(0, 2);
+
     box.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
-        <span class="visit-badge badge-good">✓ Evento guardado con predicción</span>
-        <span class="todo-tag ${escape(ev.tagClass)}">${escape(ev.tag)}</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <span class="visit-badge badge-good">✓ Guardado en la cuenta @${escape(user?.username || '')}</span>
+        <span class="todo-tag ${escape(wx.tagClass)}">${escape(wx.tag)}</span>
       </div>
       <h3 style="margin:0;font-size:16px;color:#fff">${escape(ev.name)}</h3>
-      <p class="hint" style="margin:3px 0 10px">${escape(ev.date)} a las ${escape(ev.time)} hs · ${escape(ev.place)}</p>
+      <p class="hint" style="margin:3px 0 10px">${escape(ev.start.slice(0, 10))} a las ${escape(ev.start.slice(11, 16))} hs · ${escape(ev.location_label || cityName)}</p>
 
       <div class="pred-result-grid">
-        <div class="pred-metric-card">
-          <span>Temperatura</span>
-          <strong>${ev.temp} °C</strong>
-        </div>
-        <div class="pred-metric-card">
-          <span>Lluvia</span>
-          <strong>${ev.rainProb} %</strong>
-        </div>
-        <div class="pred-metric-card">
-          <span>Viento</span>
-          <strong>${ev.windKmh} km/h</strong>
-        </div>
-        <div class="pred-metric-card">
-          <span>Índice UV</span>
-          <strong>${ev.uv} (${ev.uv >= 8 ? 'Alto' : ev.uv >= 5 ? 'Moderado' : 'Bajo'})</strong>
-        </div>
-        <div class="pred-metric-card" style="grid-column:span 2">
-          <span>Confianza del pronóstico</span>
-          <strong>${escape(ev.confidence)}</strong>
-        </div>
+        <div class="pred-metric-card"><span>Temperatura</span><strong>${wx.temp} °C</strong></div>
+        <div class="pred-metric-card"><span>Lluvia</span><strong>${wx.rainProb} %</strong></div>
+        <div class="pred-metric-card"><span>Viento</span><strong>${wx.windKmh} km/h</strong></div>
+        <div class="pred-metric-card"><span>Índice UV</span><strong>${wx.uv} (${wx.uv >= 8 ? 'Alto' : wx.uv >= 5 ? 'Moderado' : 'Bajo'})</strong></div>
+        <div class="pred-metric-card" style="grid-column:span 2"><span>Confianza</span><strong>${escape(wx.confidence)}</strong></div>
       </div>
 
       <div class="pred-recommendation-box">
-        <strong>Recomendación:</strong> ${escape(ev.recommendation)}
-        ${ev.notify_change ? '<br><small style="color:#38d9a9">🔔 Aviso activado: te notificaremos en la campanita si cambia la predicción.</small>' : ''}
+        <strong>Evaluación (${escape(statusBanner)}):</strong> ${escape(wx.recommendation)}
+        ${ev.notifications ? '<br><small style="color:#38d9a9">🔔 Seguimiento guardado en tu cuenta: avisaremos si cambia la predicción.</small>' : ''}
       </div>
 
+      ${alternatives.length ? `
+        <div style="margin-top:10px">
+          <p class="sub-eyebrow" style="margin:6px 0">ALTERNATIVAS SUGERIDAS</p>
+          ${alternatives.map(a => `<p class="hint" style="margin:4px 0">• ${escape(a.start.slice(0, 16).replace('T', ' '))} — ${escape(a.assessment.label)}</p>`).join('')}
+        </div>
+      ` : ''}
+
       <div class="actions" style="margin-top:12px">
-        <button type="button" id="btn-go-agenda-after-save" class="btn-cta-outline w-full">Ver en Agenda y Calendario</button>
+        <button type="button" id="btn-go-agenda-after-save" class="btn-cta-outline" style="flex:1">Ver en Agenda</button>
+        <a class="btn-text-teal" href="/api/events/${escape(ev.id)}/report.pdf" target="_blank" rel="noopener">PDF</a>
       </div>
     `;
     $('btn-go-agenda-after-save').onclick = () => panel('calendar');
@@ -957,84 +1317,74 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   $('quick-event-form').onsubmit = async e => {
     e.preventDefault();
-    const city = cities.find(c => c.id === state.city_id) || { id: 'comodoro-rivadavia', name: 'Comodoro Rivadavia', latitude: -45.88 };
-    const name = $('qe-name').value.trim();
-    const dateStr = $('qe-date').value;
-    const timeStr = $('qe-time').value || '10:30';
-    const place = $('qe-place').value.trim();
-    const actType = $('qe-type').value;
-    const notifyChange = $('qe-notify').checked;
-
-    const days = await getCityForecastDays(city.id);
-    const matchDay = days.find(d => d.date === dateStr) || days[0];
-    const diffDays = Math.max(0, Math.round((Time.parse(dateStr) - Date.now()) / 86400000));
-    const confidence = diffDays <= 3
-      ? 'Alta (90%) · Horizonte cercano Open-Meteo'
-      : diffDays <= 7
-        ? 'Media-Alta (82%) · Pronóstico operativo Open-Meteo'
-        : diffDays <= 15
-          ? 'Media (70%) · Horizonte extendido 16 días'
-          : 'Referencia climatológica NASA POWER (2000–2024)';
-
-    let tag = 'Ideal', tagClass = 'tag-ideal', rec = '';
-    if (actType === 'indoor') {
-      tag = 'Techado';
-      tagClass = 'tag-indoor';
-      rec = `Actividad bajo techo sin restricciones climáticas. Afuera se esperan ${matchDay.temp}°C y viento de ${matchDay.windKmh} km/h.`;
-    } else if (matchDay.rainProb >= 45) {
-      tag = 'Lluvia probable';
-      tagClass = 'tag-rain';
-      rec = `Probabilidad de lluvia del ${matchDay.rainProb}%. Se recomienda llevar equipo impermeable o evaluar un horario alternativo.`;
-    } else if (matchDay.windKmh >= 35) {
-      tag = 'Ventoso';
-      tagClass = 'tag-windy';
-      rec = `Jornada con buena temperatura (${matchDay.temp}°C) pero viento de ${matchDay.windKmh} km/h. Llevá cortaviento, protector solar y anteojos.`;
-    } else {
-      tag = 'Ideal';
-      tagClass = 'tag-ideal';
-      rec = `Condiciones muy favorables para la actividad (${matchDay.temp}°C, lluvia ${matchDay.rainProb}%). Llevá protector solar (UV ${matchDay.uv}) y agua.`;
+    if (!user) {
+      syncAddEventAuthGate();
+      return;
     }
+    const errBox = $('qe-error-msg');
+    errBox.hidden = true;
+    const submitBtn = $('btn-save-and-predict');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Guardando en tu cuenta…';
 
-    const newEv = {
-      id: 'ev-local-' + Date.now(),
-      city_id: city.id,
-      name,
-      date: dateStr,
-      time: timeStr,
-      place,
-      activity_type: actType,
-      notify_change: notifyChange,
-      temp: matchDay.temp,
-      rainProb: matchDay.rainProb,
-      windKmh: matchDay.windKmh,
-      uv: matchDay.uv,
-      tag,
-      tagClass,
-      icon: matchDay.icon,
-      confidence,
-      recommendation: rec
-    };
+    try {
+      const editId = $('qe-edit-id').value.trim();
+      const name = $('qe-name').value.trim();
+      const dateStr = $('qe-date').value;
+      const timeStr = $('qe-time').value || '10:30';
+      const place = $('qe-place').value.trim();
+      const activity = $('qe-type').value;
+      const notifications = $('qe-notify').checked;
+      const { start, end } = buildArgentinaStartEnd(dateStr, timeStr, 2);
 
-    localAgendaEvents.unshift(newEv);
+      const isIndoor = activity === 'indoor';
+      const preferences = isIndoor
+        ? { max_precipitation: 60, require_official_alerts: false }
+        : { min_temperature: 5, max_temperature: 34, max_probability: 60, max_wind: 12, require_official_alerts: false };
 
-    if (notifyChange) {
-      localNotifications.unshift({
-        id: 'notif-' + Date.now(),
-        event_id: newEv.id,
-        city_id: city.id,
-        title: `Monitoreo activado · ${name}`,
-        message: `Predicción inicial para el ${dateStr} (${timeStr} hs): ${matchDay.temp}°C, lluvia ${matchDay.rainProb}%, viento ${matchDay.windKmh} km/h.`,
-        change_detail: `Estado: ${tag} · ${confidence}`,
-        recommendation: rec,
-        created_at: 'Ahora',
-        unread: true
+      const payload = {
+        name,
+        description: `Actividad ${activity} en ${place}`,
+        activity,
+        city_id: state.city_id,
+        location_label: place,
+        start,
+        end,
+        participants: 1,
+        outdoor: !isIndoor,
+        transport: 'walk',
+        flexible_days: 2,
+        flexible_hours: 0,
+        preferences,
+        notifications
+      };
+
+      const savedEv = await api('/api/events' + (editId ? '/' + editId : ''), {
+        method: editId ? 'PATCH' : 'POST',
+        body: JSON.stringify(payload)
       });
-      updateNotificationBadge();
-    }
 
-    showSavedEventPredictionCard(newEv);
-    updateTime(dateStr, { center: true });
-    renderEvents();
+      let evalResult = null;
+      try {
+        evalResult = await api(`/api/events/${savedEv.id}/evaluate`, { method: 'POST', body: '{}' });
+      } catch (_) {}
+
+      const wx = await computeEventWeatherSummary(savedEv);
+      await loadAccount();
+      showSavedEventPredictionCard(savedEv, wx, evalResult);
+      updateTime(dateStr, { center: true });
+      $('qe-edit-id').value = '';
+      $('qe-reset-form-btn').hidden = true;
+      $('qe-panel-heading').textContent = 'Agregar evento';
+      notice('Evento guardado en tu cuenta con predicción.');
+    } catch (error) {
+      errBox.textContent = error.message;
+      errBox.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
   };
 
   // ==================== INTERACCIÓN 4: "PREDICCIÓN" CON TIRA DE FECHAS ====================
@@ -1086,7 +1436,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <p class="hint" style="margin:0">${escape(city.name)} · Máx ${d.maxTemp}° / Mín ${d.minTemp}°</p>
         </div>
         <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:38px;height:38px">${weatherSvg(d.icon)}</div>
+          <div style="width:36px;height:36px">${weatherSvg(d.icon)}</div>
           <div class="pred-day-temp-big">${d.temp}°</div>
         </div>
       </div>
@@ -1120,42 +1470,126 @@ document.addEventListener('DOMContentLoaded', async () => {
     `;
 
     $('btn-plan-this-predicted-day').onclick = () => {
-      prepareQuickEventForm(d.date);
+      resetQuickEventForm();
+      $('qe-date').value = d.date;
       $('quick-event-result').hidden = true;
       panel('add-event');
     };
   }
 
-  // ==================== PANEL GUARDADOS ====================
+  // ==================== PANEL GUARDADOS Y LISTA EN MI CUENTA ====================
   function renderSavedPanel() {
     const savedCityObjs = cities.filter(c => savedCities.has(c.id));
     $('saved-cities-list').innerHTML = savedCityObjs.map(c => `
-      <article class="agenda-card" style="display:flex;align-items:center;justify-content:space-between">
+      <article class="agenda-card" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div>
           <strong style="color:#fff">${escape(c.name)}</strong>
           <p class="hint" style="margin:2px 0 0">${escape(c.province)} · ${escape(c.region)}</p>
         </div>
-        <button type="button" class="btn-text-teal" data-jump-city="${escape(c.id)}">Ver en mapa</button>
+        <div style="display:flex;gap:6px">
+          <button type="button" class="btn-text-teal" data-jump-city="${escape(c.id)}">Ver</button>
+          <button type="button" class="btn-danger-outline" data-unsave-city="${escape(c.id)}">Quitar</button>
+        </div>
       </article>
-    `).join('') || '<p class="hint">No tenés destinos guardados. Tocá el corazón ♡ en la tarjeta de una ciudad.</p>';
+    `).join('') || '<p class="hint">Todavía no guardaste ciudades. Tocá el corazón ♡ en la tarjeta de cualquier destino.</p>';
 
     $('saved-cities-list').querySelectorAll('[data-jump-city]').forEach(btn => {
       btn.onclick = () => {
         selectCity(btn.dataset.jumpCity);
         $('destination-card').hidden = false;
+        if (isMobile()) panel(null);
       };
     });
 
-    $('saved-events-summary').innerHTML = localAgendaEvents.map(ev => `
+    $('saved-cities-list').querySelectorAll('[data-unsave-city]').forEach(btn => {
+      btn.onclick = async () => {
+        savedCities.delete(btn.dataset.unsaveCity);
+        updateSaveCityButton();
+        await saveAccountPreferences();
+        renderSavedPanel();
+      };
+    });
+
+    const activeEvs = events.filter(e => e.status === 'active');
+    $('saved-events-summary').innerHTML = activeEvs.map(ev => `
       <article class="agenda-card">
         <div class="agenda-card-top">
           <strong>${escape(ev.name)}</strong>
-          <span class="todo-tag ${escape(ev.tagClass)}">${ev.temp}° · ${escape(ev.tag)}</span>
+          <span class="todo-tag tag-ideal">${escape(ev.start.slice(0, 10))}</span>
         </div>
-        <p class="hint" style="margin:4px 0 0">${escape(ev.date)} · ${escape(ev.time)} hs · ${escape(ev.place)}</p>
+        <p class="hint" style="margin:4px 0 0">${escape(ev.start.slice(11, 16))} hs · ${escape(ev.location_label || ev.city_id)}</p>
       </article>
-    `).join('') || '<p class="hint">Sin eventos guardados.</p>';
+    `).join('') || '<p class="hint">No tenés eventos guardados todavía.</p>';
   }
+
+  function renderEventsListInAccount() {
+    if (!user) {
+      $('events-list').innerHTML = '';
+      return;
+    }
+    $('events-list').innerHTML = events.map(e => `
+      <article class="agenda-card">
+        <div class="agenda-card-top">
+          <div>
+            <h3 class="agenda-card-title">${escape(e.name)}</h3>
+            <p class="agenda-card-meta">${escape(e.start.slice(0, 16).replace('T', ' '))} · ${escape(e.location_label || e.city_id)} · ${escape(e.status)}</p>
+          </div>
+        </div>
+        <div class="actions" style="margin-top:6px">
+          <button type="button" class="btn-text-teal" data-acc-edit="${escape(e.id)}">Editar</button>
+          <a class="btn-text-teal" href="/api/events/${escape(e.id)}/report.pdf" target="_blank" rel="noopener">PDF</a>
+          <button type="button" class="btn-danger-outline" data-acc-del="${escape(e.id)}">Eliminar</button>
+        </div>
+      </article>
+    `).join('') || '<p class="hint">Sin eventos guardados en tu cuenta todavía.</p>';
+
+    $('events-list').querySelectorAll('[data-acc-edit]').forEach(btn => {
+      btn.onclick = () => {
+        const ev = events.find(x => x.id === btn.dataset.accEdit);
+        if (ev) { loadEventIntoQuickForm(ev); panel('add-event'); }
+      };
+    });
+    $('events-list').querySelectorAll('[data-acc-del]').forEach(btn => {
+      btn.onclick = safe(async () => {
+        await api('/api/events/' + btn.dataset.accDel, { method: 'DELETE' });
+        await loadAccount();
+      });
+    });
+  }
+
+  // Editor avanzado heredado (para pruebas científicas y usuarios avanzados)
+  function eventPayload() {
+    const f = $('event-form').elements, prefs = {};
+    for (const k of ['min_temperature', 'max_temperature', 'max_probability', 'max_precipitation', 'max_wind', 'max_gust']) {
+      if (f[k].value !== '') prefs[k] = Number(f[k].value);
+    }
+    prefs.require_official_alerts = f.require_official_alerts.checked;
+    return {
+      name: f.name.value, description: f.description.value, activity: f.activity.value,
+      city_id: state.city_id, location_label: f.location_label.value,
+      start: f.start.value + ':00-03:00', end: f.end.value + ':00-03:00',
+      participants: +f.participants.value, transport: f.transport.value,
+      outdoor: f.outdoor.checked, flexible_days: +f.flexible_days.value,
+      flexible_hours: +f.flexible_hours.value, preferences: prefs, notifications: f.notifications.checked
+    };
+  }
+
+  $('event-form').onsubmit = safe(async e => {
+    e.preventDefault();
+    if (!user) { notice('Iniciá sesión para guardar un evento.', true); return; }
+    const id = $('event-form').elements.id.value;
+    await api('/api/events' + (id ? '/' + id : ''), { method: id ? 'PATCH' : 'POST', body: JSON.stringify(eventPayload()) });
+    await loadAccount();
+    notice('Evento guardado en tu cuenta.');
+  });
+
+  $('preview-event').onclick = safe(async () => {
+    if (!user) { notice('Iniciá sesión para evaluar el evento.', true); return; }
+    $('assessment').textContent = 'Consultando pronóstico del evento y alternativas…';
+    const result = await api('/api/events/preview', { method: 'POST', body: JSON.stringify(eventPayload()) });
+    $('assessment').innerHTML = `<article class="card"><strong>${escape(result.assessment.label)}</strong></article><h2>Fechas alternativas</h2>` +
+      result.alternatives.map(a => `<article class="card"><p>${escape(a.start)} · ${escape(a.assessment.label)}</p></article>`).join('');
+  });
 
   // ==================== MAPA Y CIUDADES ====================
   function selectedCities() {
@@ -1198,6 +1632,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       marker.on('click', () => {
         $('destination-card').hidden = false;
+        $('mob-open-dest').hidden = true;
+        if (isMobile()) setDestinationCompact(false);
         if ($('territory').value === 'multi') {
           state.selected = state.selected.includes(city.id) ? state.selected.filter(id => id !== city.id) : [...state.selected, city.id];
           state.mode = 'compare';
@@ -1213,7 +1649,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       pointLayers.set(city.id, marker);
     }
     if ($('selection-label')) {
-      $('selection-label').textContent = selected.size + ' ubicación(es) seleccionada(s) · puntos consultados, sin interpolación';
+      $('selection-label').textContent = selected.size + ' ubicación(es) seleccionada(s) · puntos consultados';
     }
   }
 
@@ -1224,15 +1660,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if ($('city')) $('city').value = id;
     if ($('search')) $('search').value = city.name;
     if ($('location-name')) $('location-name').textContent = city.name + ' · ' + city.province;
-    if ($('event-city')) $('event-city').textContent = 'Ubicación: ' + city.name + ' · centroide GeoRef, no sitio exacto.';
+    if ($('event-city')) $('event-city').textContent = 'Ubicación: ' + city.name + ' · centroide GeoRef.';
     $('destination-card').hidden = false;
-    map.flyTo([city.latitude, city.longitude], Math.max(map.getZoom(), 7), { duration: 0.4 });
+    $('mob-open-dest').hidden = true;
+    map.flyTo([city.latitude, city.longitude], Math.max(map.getZoom(), isMobile() ? 6 : 7), { duration: 0.4 });
     incidents = allIncidents.filter(i => i.city_id === id);
     renderIncidents();
     renderMap();
     queryContext();
     updateDestinationCard();
     renderTripBar();
+    prepareQuickEventForm();
     if (fetchData) scheduleLoad(0);
     if (state.panel === 'profile') safe(profile)();
     if (state.panel === 'prediction') renderPredictionPanel();
@@ -1301,7 +1739,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderMap();
     document.body.dataset.frameReady = 'false';
     $('inspector').setAttribute('aria-busy', 'true');
-    if ($('map-value')) $('map-value').textContent = 'Consultando ' + (variableNames[state.variable] || state.variable) + '…';
     loadTimer = setTimeout(() => safe(load)(), delay);
   }
 
@@ -1309,13 +1746,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const value = frame?.focus?.value, unit = frame?.focus?.unit || '';
     $('value').textContent = number(value);
     $('value-unit').textContent = unit;
-    if ($('map-value')) $('map-value').textContent = number(value) + (value != null ? ' ' + unit : ' · sin dato para esta fecha');
+    if ($('map-value')) $('map-value').textContent = number(value) + (value != null ? ' ' + unit : ' · sin dato');
     const kind = frame?.kind || 'unavailable';
     $('time-kind').className = 'kind-label ' + kind;
     $('time-kind').textContent = kind === 'forecast' && Math.abs(Time.parse(state.date) - Date.now()) < 36e5 ? 'AHORA · PRONÓSTICO' : labels[kind] || kind;
     $('data-kind').textContent = labels[kind] || kind;
     $('data-title').textContent = variableNames[state.variable] || state.variable;
-    if (kind === 'climatology_reference' && $('map-value')) $('map-value').textContent = number(value) + ' ' + unit + ' · referencia mensual';
   }
 
   function plot(rows) {
@@ -1337,10 +1773,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       type: 'line',
       data: { datasets },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: false,
-        parsing: false,
+        responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
         scales: {
           x: { type: 'linear', min, max: max === min ? max + 36e5 : max, ticks: { color: '#9bb1bd', maxTicksLimit: 4, callback: v => new Date(v).toISOString().slice(0, record?.frequency === 'hourly' ? 16 : 10) } },
           y: { ticks: { color: '#9bb1bd' } }
@@ -1360,23 +1793,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     controller?.abort();
     controller = new AbortController();
     const signal = controller.signal, ticket = ++seq;
-    record = null;
-    frame = null;
-    comparisonRecords = [];
-    pointFrames.clear();
-    activeValue();
-    renderMap();
-    $('provenance').innerHTML = '';
-    $('comparison').innerHTML = '';
-    $('limits').textContent = '';
+    record = null; frame = null; comparisonRecords = []; pointFrames.clear();
+    activeValue(); renderMap();
+    $('provenance').innerHTML = ''; $('comparison').innerHTML = ''; $('limits').textContent = '';
     if (chart) { chart.destroy(); chart = null; }
-    notice('Consultando ubicación y fecha…');
     try {
       const result = await obtain(state.city_id, signal);
       if (ticket !== seq) return;
-      frame = result;
-      record = result.record;
-      pointFrames.set(state.city_id, result);
+      frame = result; record = result.record; pointFrames.set(state.city_id, result);
       document.body.dataset.frameDate = result.selection.date;
       document.body.dataset.frameVariable = result.selection.variable;
       document.body.dataset.frameKind = result.kind;
@@ -1384,18 +1808,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       $('inspector').setAttribute('aria-busy', 'false');
       const rows = record ? [record] : [];
       comparisonRecords = rows;
-      activeValue();
-      updateDestinationCard();
-      renderMap();
-      plot(rows);
-      queryContext();
+      activeValue(); updateDestinationCard(); renderMap(); plot(rows); queryContext();
       const climate = result.climatology;
       const fields = record ? [
         ['Fuente / producto', record.provider + ' · ' + record.product],
         ['Frecuencia nativa', record.frequency],
         ['Obtención UTC', record.fetched_at],
         ['Muestra seleccionada', result.focus?.sample_date || 'Sin muestra válida'],
-        ['Cobertura de la extracción', record.series.length + ' registros']
+        ['Cobertura', record.series.length + ' registros']
       ] : climate ? [
         ['Fuente', 'NASA POWER · referencia mensual 2000–2024'],
         ['Referencia', climate.count + ' años para el mes ' + climate.month],
@@ -1403,16 +1823,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       ] : [];
       $('provenance').innerHTML = fields.map(([name, value]) => `<dt>${escape(name)}</dt><dd>${escape(value)}</dd>`).join('');
       $('limits').textContent = [result.message, ...(record?.limitations || [])].join(' ');
-      notice(result.message, result.status === 'unavailable');
       if (state.panel === 'impact') await impact();
     } catch (error) {
       if (ticket !== seq || error.name === 'AbortError') return;
       frame = { kind: 'unavailable', focus: null, message: error.message };
-      activeValue();
-      pointFrames.set(state.city_id, frame);
-      updateDestinationCard();
-      renderMap();
-      notice(error.message, true);
+      activeValue(); pointFrames.set(state.city_id, frame); updateDestinationCard(); renderMap();
     }
   }
 
@@ -1436,14 +1851,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('present').onclick = () => { stop(); state.mode = 'date'; $('mode').value = 'date'; state.scale = 'daily'; $('scale').value = 'daily'; updateTime(Time.iso(Date.now()), { center: true }); };
   $('city').onchange = () => selectCity($('city').value);
 
-  // Buscador de ciudades en la barra superior con dropdown interactivo
+  // Buscador de ciudades
   function renderSearchDropdown(queryText) {
     const q = queryText.trim().toLocaleLowerCase('es');
     const matches = cities.filter(c => !q || c.name.toLocaleLowerCase('es').includes(q) || c.province.toLocaleLowerCase('es').includes(q));
-    if (!matches.length) {
-      $('search-dropdown').hidden = true;
-      return;
-    }
+    if (!matches.length) { $('search-dropdown').hidden = true; return; }
     $('search-dropdown').innerHTML = matches.slice(0, 8).map(c => `
       <button type="button" class="search-option" data-pick-city="${escape(c.id)}">
         <span>${escape(c.name)}</span>
@@ -1455,6 +1867,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       btn.onclick = () => {
         $('search-dropdown').hidden = true;
         selectCity(btn.dataset.pickCity);
+        if (isMobile()) setDestinationCompact(false);
       };
     });
   }
@@ -1477,7 +1890,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('variable').onchange = () => { state.variable = $('variable').value; queryContext(); scheduleLoad(0); };
   $('mode').onchange = () => { state.mode = $('mode').value; safe(load)(); panel('data'); };
 
-  // Calendario mensual con etiquetas de eventos
+  // Calendario mensual
   function calendar() {
     const type = $('cal-view').value, first = new Date(calendarDate);
     first.setUTCDate(1);
@@ -1488,29 +1901,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('calendar-jump').value = state.date.slice(0, 10);
     $('calendar').classList.toggle('list', type === 'list' || type === 'day');
 
-    const allEvents = [
-      ...localAgendaEvents.map(e => ({ id: e.id, name: `${e.name} (${e.temp}° · ${e.tag})`, start: e.date })),
-      ...events.filter(e => e.status === 'active')
-    ];
-
+    const activeEvents = events.filter(e => e.status === 'active');
     if (type === 'list') {
-      $('calendar').innerHTML = allEvents.map(e => `<button data-event="${escape(e.id)}">${escape(e.name)} · ${escape(e.start)}</button>`).join('') || '<p>Sin eventos guardados.</p>';
+      $('calendar').innerHTML = activeEvents.map(e => `<button type="button" data-event="${escape(e.id)}">${escape(e.name)} · ${escape(e.start.slice(0, 10))}</button>`).join('') || '<p class="hint">Sin eventos guardados.</p>';
     } else {
       let html = type === 'month' ? ['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(d => '<span class="hint">' + d + '</span>').join('') + '<span></span>'.repeat((first.getUTCDay() + 6) % 7) : '';
       for (let i = 0; i < count; i++) {
         const day = new Date(first);
         day.setUTCDate(first.getUTCDate() + i);
         const iso = day.toISOString().slice(0, 10);
-        const associated = allEvents.filter(e => e.start.slice(0, 10) === iso);
-        html += `<button data-day="${iso}" class="${iso === state.date.slice(0, 10) ? 'selected ' : ''}${associated.length ? 'has-event' : ''}">${day.getUTCDate()}${associated.map(e => '<span class="day-caption">' + escape(e.name) + '</span>').join('')}</button>`;
+        const associated = activeEvents.filter(e => e.start.slice(0, 10) === iso);
+        html += `<button type="button" data-day="${iso}" class="${iso === state.date.slice(0, 10) ? 'selected ' : ''}${associated.length ? 'has-event' : ''}">${day.getUTCDate()}${associated.map(e => '<span class="day-caption">' + escape(e.name) + '</span>').join('')}</button>`;
       }
       $('calendar').innerHTML = html;
     }
 
     $('calendar').querySelectorAll('[data-day]').forEach(button => {
-      button.onclick = () => {
-        updateTime(button.dataset.day, { center: true });
-      };
+      button.onclick = () => updateTime(button.dataset.day, { center: true });
     });
   }
 
@@ -1529,7 +1936,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('cal-next').onclick = () => moveCalendar(1);
   $('calendar-jump').onchange = () => updateTime($('calendar-jump').value, { center: true });
   $('new-event').onclick = () => {
-    prepareQuickEventForm(state.date.slice(0, 10));
+    resetQuickEventForm();
+    $('qe-date').value = state.date.slice(0, 10);
     $('quick-event-result').hidden = true;
     panel('add-event');
   };
@@ -1542,18 +1950,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderTimelineMarkers() {
     if (!$('time-markers')) return;
-    const rows = [
-      ...events.filter(e => e.status === 'active').map(e => ({ id: e.id, date: e.start, name: e.name, event: true })),
-      ...localAgendaEvents.map(e => ({ id: e.id, date: e.date, name: e.name, event: true }))
-    ];
+    const rows = events.filter(e => e.status === 'active').map(e => ({ id: e.id, date: e.start, name: e.name }));
     $('time-markers').innerHTML = rows.filter(r => Time.position(r.date, view) >= 0 && Time.position(r.date, view) <= 1).map(r =>
-      `<button style="left:${Time.position(r.date, view) * 100}%" class="event-mark" data-event="${escape(r.id)}" title="${escape(r.name + ' · ' + r.date)}">⚑</button>`
+      `<button type="button" style="left:${Time.position(r.date, view) * 100}%" class="event-mark" data-event="${escape(r.id)}" title="${escape(r.name + ' · ' + r.date)}">⚑</button>`
     ).join('');
   }
 
   function renderEvents() {
     eventMarkers.clearLayers();
     incidentMarkers.clearLayers();
+    for (const ev of events.filter(e => e.status === 'active')) {
+      const city = cities.find(c => c.id === ev.city_id);
+      if (!city) continue;
+      L.circleMarker([city.latitude, city.longitude], { radius: 9, color: '#38d9a9', fillColor: '#38d9a9', fillOpacity: 0.35, weight: 2 })
+        .bindTooltip(`📅 ${escape(ev.name)} · ${escape(ev.start.slice(0, 10))}`)
+        .on('click', () => panel('calendar'))
+        .addTo(eventMarkers);
+    }
     renderTimelineMarkers();
     calendar();
   }
@@ -1578,28 +1991,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (_) {}
   }
 
-  async function loadAccount() {
-    try {
-      const me = await api('/api/session');
-      user = me.user;
-      csrf = me.csrf_token;
-      $('auth').hidden = !!user;
-      $('account').hidden = !user;
-      if (user) {
-        $('account-name').textContent = user.username;
-        $('avatar-initial').textContent = user.username.charAt(0).toUpperCase();
-        events = await api('/api/events');
-        notificationRows = await api('/api/notifications');
-      }
-    } catch (_) {}
-    updateNotificationBadge();
-  }
-
   async function impact() {
     const city = state.city_id, result = await api('/api/impact?city_id=' + city);
     $('impact-content').innerHTML = `<p class="eyebrow">${escape(result.status)}</p><p>${escape(result.summary)}</p>`;
   }
 
+  function download(format) {
+    if (!record) { notice('Seleccioná una serie con datos.', true); return; }
+    const content = format === 'json'
+      ? JSON.stringify(record, null, 2)
+      : 'city_id,date,value,unit\n' + record.series.map(p => `${record.location.id},${p.date},${p.value ?? ''},${record.unit}`).join('\n');
+    const url = URL.createObjectURL(new Blob([content], { type: format === 'json' ? 'application/json' : 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'earthlens-' + state.city_id + '-' + state.variable + '.' + format;
+    a.click(); URL.revokeObjectURL(url);
+  }
+  $('export-json').onclick = () => download('json');
+  $('export-csv').onclick = () => download('csv');
+  $('report').onclick = () => {
+    if (!frame?.effective_query) return;
+    const { kind, ...selection } = frame.effective_query;
+    window.open('/api/workspace/report.pdf?' + new URLSearchParams(selection), '_blank', 'noopener');
+  };
   $('theme').onclick = () => document.body.classList.toggle('light');
 
   try {
@@ -1620,12 +2033,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('start').value = state.start;
     $('end').value = state.end;
 
+    syncMobileLayout(true);
     selectCity(state.city_id, { fetchData: false });
     updateTime(state.date, { fetch: false });
     await loadAccount();
     await load();
     if (initialPanel) panel(initialPanel);
-    window.addEventListener('resize', () => { map.invalidateSize(); chart?.resize(); });
+    window.addEventListener('resize', () => {
+      syncMobileLayout(false);
+      map.invalidateSize();
+      chart?.resize();
+    });
   } catch (error) {
     notice(error.message, true);
   }
