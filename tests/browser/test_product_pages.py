@@ -42,6 +42,7 @@ class ProductPageTests(unittest.TestCase):
                     self.assertNotIn('href="/radar"', html)
                     self.assertNotIn('href="/fingerprint"', html)
                     self.assertNotIn('href="/laboratory"', html)
+                    self.assertNotIn('href="/time-machine/legacy"', html)
                 else:
                     self.assertIn('href="/radar"', html)
                     self.assertIn('href="/fingerprint"', html)
