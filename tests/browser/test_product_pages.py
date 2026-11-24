@@ -33,13 +33,18 @@ class ProductPageTests(unittest.TestCase):
             with self.subTest(page=page):
                 html = self.client.get(page).get_data(as_text=True)
                 self.assertEqual(html.count('<nav '), 1)
-                self.assertIn('href="/radar"', html)
-                self.assertIn('href="/fingerprint"', html)
                 self.assertIn('aria-label="Navegación principal"', html)
                 if page == "/":
                     self.assertIn('/static/js/time-machine/workspace.js', html)
                     self.assertIn('id="scrubber"', html)
                     self.assertNotIn('home-location-map', html)
+                    self.assertNotIn('href="/sources"', html)
+                    self.assertNotIn('href="/radar"', html)
+                    self.assertNotIn('href="/fingerprint"', html)
+                    self.assertNotIn('href="/laboratory"', html)
+                else:
+                    self.assertIn('href="/radar"', html)
+                    self.assertIn('href="/fingerprint"', html)
 
     def test_product_assets_are_served(self):
         for asset in ("js/products/products.js", "js/products/radar.js", "js/products/fingerprint.js", "css/pages/products.css"):
